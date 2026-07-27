@@ -24,6 +24,29 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Upgrade source to latest verified baseline
+        run: |
+          rm -rf /tmp/xiangneng-upgrade-patches
+          mkdir -p /tmp/xiangneng-upgrade-patches
+          tar -xzf .github/deployment/upgrade-patches.tar.gz -C /tmp/xiangneng-upgrade-patches
+
+          apply_patch() {
+            pattern="$1"
+            patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name "$pattern" -print -quit)
+            if [ -z "$patch_file" ]; then
+              echo "Missing verified upgrade patch: $pattern" >&2
+              return 1
+            fi
+            echo "Applying $(basename "$patch_file")"
+            git apply --check "$patch_file"
+            git apply --whitespace=nowarn "$patch_file"
+          }
+
+          apply_patch "*小程序报销与岗位职级权限优化-20260727.patch"
+          apply_patch "*内部组织按业务部门修正版-20260727.patch"
+          apply_patch "*AI模块化维护基础优化-20260727.patch"
+          git diff --check
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
