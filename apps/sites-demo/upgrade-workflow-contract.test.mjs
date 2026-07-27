@@ -10,6 +10,8 @@ test("public demo upgrades the repository baseline through the three verified pa
   const maintainability = "*AI模块化维护基础优化-20260727.patch";
   assert.match(workflow, /Upgrade source to latest verified baseline/);
   assert.match(workflow, /upgrade-patches\.tar\.gz/);
+  assert.match(workflow, /Normalize patched text line endings/);
+  assert.ok(workflow.includes("sed -i 's/\\r$//'"));
   for (const marker of [reimbursement, organization, maintainability]) {
     assert.ok(workflow.includes(marker), `missing patch marker: ${marker}`);
   }

@@ -45,6 +45,15 @@ jobs:
           apply_patch "*小程序报销与岗位职级权限优化-20260727.patch"
           apply_patch "*内部组织按业务部门修正版-20260727.patch"
           apply_patch "*AI模块化维护基础优化-20260727.patch"
+
+          echo "Normalize patched text line endings"
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              *.ts|*.tsx|*.js|*.mjs|*.cjs|*.json|*.md|*.prisma|*.sql|*.yml|*.yaml|*.css|*.scss|*.sass|*.less|*.html|*.txt)
+                sed -i 's/\r$//' "$file"
+                ;;
+            esac
+          done < <(git diff --name-only --diff-filter=ACM -z)
           git diff --check
 
       - name: Set up Node.js
