@@ -11,6 +11,8 @@ test("public demo upgrades the repository baseline through the three verified pa
   assert.match(workflow, /Upgrade source to latest verified baseline/);
   assert.match(workflow, /upgrade-patches\.tar\.gz/);
   assert.match(workflow, /Normalize patched text line endings/);
+  assert.match(workflow, /Publish failed upgrade log/);
+  assert.match(workflow, /public-demo-upgrade\.log/);
   assert.ok(workflow.includes("sed -i 's/\\r$//'"));
   for (const marker of [reimbursement, organization, maintainability]) {
     assert.ok(workflow.includes(marker), `missing patch marker: ${marker}`);
