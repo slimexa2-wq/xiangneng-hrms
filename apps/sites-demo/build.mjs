@@ -66,6 +66,8 @@ await rm(stageDir, { recursive: true, force: true });
 await rm(distDir, { recursive: true, force: true });
 await mkdir(stageDir, { recursive: true });
 
+run(["--filter", "@xiangneng/shared", "build"]);
+
 run(
   [
     "--filter",
