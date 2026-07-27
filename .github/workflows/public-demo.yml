@@ -39,10 +39,39 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build isolated synthetic-data demo
+        id: build
+        continue-on-error: true
         env:
           PUBLIC_DEMO_ROOT: ./
           PUBLIC_DEMO_ROUTER_MODE: hash
-        run: pnpm build:public-demo
+        run: |
+          set +e
+          pnpm build:public-demo > public-demo-build.log 2>&1
+          status=$?
+          cat public-demo-build.log
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Publish failed build log
+        if: steps.build.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/xiangneng-public-demo-debug
+          cp public-demo-build.log /tmp/xiangneng-public-demo-debug/BUILD_LOG.txt
+          cd /tmp/xiangneng-public-demo-debug
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo-debug
+          git add BUILD_LOG.txt
+          git commit -m "debug: public demo build ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo-debug
+
+      - name: Stop after failed build
+        if: steps.build.outcome == 'failure'
+        run: exit 1
 
       - name: Add static hosting metadata
         run: |
