@@ -1,0 +1,68 @@
+name: Build public demo
+
+on:
+  push:
+    branches:
+      - agent/public-demo-20260727
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xiangneng-public-demo
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build isolated synthetic-data demo
+        env:
+          PUBLIC_DEMO_ROOT: ./
+          PUBLIC_DEMO_ROUTER_MODE: hash
+        run: pnpm build:public-demo
+
+      - name: Add static hosting metadata
+        run: |
+          touch apps/sites-demo/dist/client/.nojekyll
+          cp apps/sites-demo/dist/client/index.html apps/sites-demo/dist/client/404.html
+          cat > apps/sites-demo/dist/client/deployment-info.json <<JSON
+          {
+            "sourceCommit": "${GITHUB_SHA}",
+            "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "dataMode": "synthetic-offline-demo"
+          }
+          JSON
+
+      - name: Publish public-demo branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd apps/sites-demo/dist/client
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo
+          git add -A
+          git commit -m "deploy: public demo ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo

@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, HashRouter } from "react-router-dom";
 import { App as AntApp, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import dayjs from "dayjs";
@@ -48,11 +48,19 @@ createRoot(root).render(
       }}
     >
       <AntApp>
-        <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </BrowserRouter>
+        {import.meta.env.VITE_ROUTER_MODE === "hash" ? (
+          <HashRouter>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </HashRouter>
+        ) : (
+          <BrowserRouter basename={import.meta.env.VITE_ROUTER_BASENAME || undefined}>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </BrowserRouter>
+        )}
       </AntApp>
     </ConfigProvider>
   </StrictMode>

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './app/App';
 import { SessionProvider } from './app/session';
@@ -28,9 +28,15 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter basename={import.meta.env.VITE_ROUTER_BASENAME || undefined}>
-        <SessionProvider><App /></SessionProvider>
-      </BrowserRouter>
+      {import.meta.env.VITE_ROUTER_MODE === 'hash' ? (
+        <HashRouter>
+          <SessionProvider><App /></SessionProvider>
+        </HashRouter>
+      ) : (
+        <BrowserRouter basename={import.meta.env.VITE_ROUTER_BASENAME || undefined}>
+          <SessionProvider><App /></SessionProvider>
+        </BrowserRouter>
+      )}
     </QueryClientProvider>
   </StrictMode>
 );

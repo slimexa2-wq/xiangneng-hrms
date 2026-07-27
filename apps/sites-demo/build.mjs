@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolvePublicDemoBuildOptions } from "./public-paths.mjs";
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = join(projectDir, "..", "..");
@@ -9,6 +10,7 @@ const stageDir = join(projectDir, ".stage");
 const distDir = join(projectDir, "dist");
 const clientDir = join(distDir, "client");
 const packageRunner = "pnpm";
+const buildOptions = resolvePublicDemoBuildOptions();
 
 function run(args, extraEnv = {}) {
   const result = spawnSync(packageRunner, args, {
@@ -65,12 +67,38 @@ await rm(distDir, { recursive: true, force: true });
 await mkdir(stageDir, { recursive: true });
 
 run(
-  ["--filter", "@xiangneng/portal", "exec", "vite", "build", "--base=/portal/", "--outDir", "../../apps/sites-demo/.stage/portal"],
-  { VITE_ROUTER_BASENAME: "/portal", VITE_DISABLE_PWA: "1" }
+  [
+    "--filter",
+    "@xiangneng/portal",
+    "exec",
+    "vite",
+    "build",
+    `--base=${buildOptions.portalBase}`,
+    "--outDir",
+    "../../apps/sites-demo/.stage/portal"
+  ],
+  {
+    VITE_ROUTER_MODE: buildOptions.routerMode,
+    VITE_ROUTER_BASENAME: buildOptions.portalBasename,
+    VITE_DISABLE_PWA: "1"
+  }
 );
 run(
-  ["--filter", "@xiangneng/admin", "exec", "vite", "build", "--outDir", "../../apps/sites-demo/.stage/admin"],
-  { VITE_PORTAL_ORIGIN: "/portal" }
+  [
+    "--filter",
+    "@xiangneng/admin",
+    "exec",
+    "vite",
+    "build",
+    `--base=${buildOptions.adminBase}`,
+    "--outDir",
+    "../../apps/sites-demo/.stage/admin"
+  ],
+  {
+    VITE_ROUTER_MODE: buildOptions.routerMode,
+    VITE_ROUTER_BASENAME: buildOptions.adminBasename,
+    VITE_PORTAL_ORIGIN: buildOptions.root === "./" ? "portal/" : `${buildOptions.root}portal/`
+  }
 );
 
 await mkdir(clientDir, { recursive: true });
