@@ -1,0 +1,53 @@
+$ pnpm --filter @xiangneng/sites-demo build
+$ node build.mjs
+[36mvite v7.3.6 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 1746 modules transformed.
+[33m
+[1m(!)[22m outDir [37m[2m/home/runner/work/xiangneng-hrms/xiangneng-hrms/apps/sites-demo/.stage/portal[22m[33m is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+[39m
+rendering chunks...
+computing gzip size...
+[2m../sites-demo/.stage/portal/[22m[32mindex.html                 [39m[1m[2m  0.55 kB[22m[1m[22m[2m │ gzip:   0.37 kB[22m
+[2m../sites-demo/.stage/portal/[22m[2massets/[22m[35mindex-CBBUXWfB.css  [39m[1m[2m 54.98 kB[22m[1m[22m[2m │ gzip:  11.17 kB[22m
+[2m../sites-demo/.stage/portal/[22m[2massets/[22m[36mindex-DtTJf_dD.js   [39m[1m[33m502.55 kB[39m[22m[2m │ gzip: 134.43 kB[22m[2m │ map: 1,927.64 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 3.03s[39m
+[36mvite v7.3.6 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 107 modules transformed.
+[31m✗[39m Build failed in 433ms
+[31merror during build:
+[31m[commonjs--resolver] Failed to resolve entry for package "@xiangneng/shared". The package may have incorrect main/module/exports specified in its package.json.[31m
+    at packageEntryFailure (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/vite@7.3.6_@types+node@22.20.1_jiti@2.7.0_lightningcss@1.32.0_sass@1.101.0_stylus@0.64._29c29bdb4686f301fc6a38e2488f6c53/node_modules/vite/dist/node/chunks/config.js:32896:32)
+    at resolvePackageEntry (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/vite@7.3.6_@types+node@22.20.1_jiti@2.7.0_lightningcss@1.32.0_sass@1.101.0_stylus@0.64._29c29bdb4686f301fc6a38e2488f6c53/node_modules/vite/dist/node/chunks/config.js:32893:2)
+    at tryNodeResolve (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/vite@7.3.6_@types+node@22.20.1_jiti@2.7.0_lightningcss@1.32.0_sass@1.101.0_stylus@0.64._29c29bdb4686f301fc6a38e2488f6c53/node_modules/vite/dist/node/chunks/config.js:32796:70)
+    at Object.handler (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/vite@7.3.6_@types+node@22.20.1_jiti@2.7.0_lightningcss@1.32.0_sass@1.101.0_stylus@0.64._29c29bdb4686f301fc6a38e2488f6c53/node_modules/vite/dist/node/chunks/config.js:32635:16)
+    at Object.handler (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/vite@7.3.6_@types+node@22.20.1_jiti@2.7.0_lightningcss@1.32.0_sass@1.101.0_stylus@0.64._29c29bdb4686f301fc6a38e2488f6c53/node_modules/vite/dist/node/chunks/config.js:33786:13)
+    at file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/rollup@4.62.2/node_modules/rollup/dist/es/shared/node-entry.js:23026:40
+    at async PluginDriver.hookFirstAndGetPlugin (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/rollup@4.62.2/node_modules/rollup/dist/es/shared/node-entry.js:22908:28)
+    at async resolveId (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/rollup@4.62.2/node_modules/rollup/dist/es/shared/node-entry.js:21369:26)
+    at async ModuleLoader.resolveId (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/rollup@4.62.2/node_modules/rollup/dist/es/shared/node-entry.js:21814:15)
+    at async Object.resolveId (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/node_modules/.pnpm/vite@7.3.6_@types+node@22.20.1_jiti@2.7.0_lightningcss@1.32.0_sass@1.101.0_stylus@0.64._29c29bdb4686f301fc6a38e2488f6c53/node_modules/vite/dist/node/chunks/config.js:4154:21)[39m
+undefined
+/home/runner/work/xiangneng-hrms/xiangneng-hrms/apps/admin:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: vite build '--base=./' --outDir ../../apps/sites-demo/.stage/admin
+file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/apps/sites-demo/build.mjs:23
+    throw new Error(`${packageRunner} ${args.join(" ")} failed with exit code ${result.status ?? "unknown"}`);
+          ^
+
+Error: pnpm --filter @xiangneng/admin exec vite build --base=./ --outDir ../../apps/sites-demo/.stage/admin failed with exit code 1
+    at run (file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/apps/sites-demo/build.mjs:23:11)
+    at file:///home/runner/work/xiangneng-hrms/xiangneng-hrms/apps/sites-demo/build.mjs:86:1
+
+Node.js v22.23.1
+/home/runner/work/xiangneng-hrms/xiangneng-hrms/apps/sites-demo:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @xiangneng/sites-demo@0.1.0 build: `node build.mjs`
+Exit status 1
+[WARN]  Local package.json exists, but node_modules missing, did you mean to install?
+[ELIFECYCLE] Command failed with exit code 1.
