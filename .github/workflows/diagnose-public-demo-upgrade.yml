@@ -1,0 +1,123 @@
+name: Diagnose public demo upgrade
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run upgrade diagnostics
+        id: diagnostic
+        continue-on-error: true
+        run: |
+          set +e
+          {
+            set -euxo pipefail
+            rm -rf /tmp/xiangneng-upgrade-patches /tmp/xiangneng-upgrade-bundle.tar.xz
+            mkdir -p /tmp/xiangneng-upgrade-patches
+            python - <<'PY'
+            import base64, hashlib, json, os, re, urllib.request
+            repo = os.environ['GITHUB_REPOSITORY']
+            request = urllib.request.Request(
+                f'https://api.github.com/repos/{repo}/issues/1/comments?per_page=100',
+                headers={
+                    'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'User-Agent': 'xiangneng-upgrade-diagnostic'
+                }
+            )
+            with urllib.request.urlopen(request) as response:
+                comments = json.load(response)
+            marker = re.compile(r'^XIANGNENG_PATCH_PART_(\d{2})_12$')
+            parts = {}
+            for comment in comments:
+                lines = (comment.get('body') or '').splitlines()
+                if not lines:
+                    continue
+                match = marker.fullmatch(lines[0].strip())
+                if match:
+                    part = int(match.group(1))
+                    if part in parts:
+                        raise SystemExit(f'duplicate marker {part:02d}')
+                    parts[part] = ''.join(lines[1:]).strip()
+            if sorted(parts) != list(range(1, 13)):
+                raise SystemExit(f'found marker parts {sorted(parts)}')
+            archive = base64.b64decode(''.join(parts[i] for i in range(1, 13)), validate=True)
+            actual = hashlib.sha256(archive).hexdigest()
+            if actual != os.environ['EXPECTED_SHA256']:
+                raise SystemExit(f'sha mismatch {actual}')
+            open('/tmp/xiangneng-upgrade-bundle.tar.xz', 'wb').write(archive)
+            print(f'MARKER_OK bytes={len(archive)} sha256={actual}')
+            PY
+            tar -xJvf /tmp/xiangneng-upgrade-bundle.tar.xz -C /tmp/xiangneng-upgrade-patches
+            for pattern in \
+              '*小程序报销与岗位职级权限优化-20260727.patch' \
+              '*内部组织按业务部门修正版-20260727.patch' \
+              '*AI模块化维护基础优化-20260727.patch'; do
+              patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name "$pattern" -print -quit)
+              echo "PATCH_CHECK=$patch_file"
+              git apply --check "$patch_file"
+              git apply --whitespace=nowarn "$patch_file"
+            done
+            while IFS= read -r -d '' file; do
+              case "$file" in
+                *.ts|*.tsx|*.js|*.mjs|*.cjs|*.json|*.md|*.prisma|*.sql|*.yml|*.yaml|*.css|*.scss|*.sass|*.less|*.html|*.txt) sed -i 's/\r$//' "$file";;
+              esac
+            done < <(git diff --name-only --diff-filter=ACM -z)
+            git diff --check
+            node scripts/generate-project-index.mjs
+            node scripts/check-architecture.mjs
+          } > upgrade-diagnostic.log 2>&1
+          status=$?
+          cat upgrade-diagnostic.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Post diagnostic result to PR
+        env:
+          STATUS: ${{ steps.diagnostic.outputs.status }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          log = open('upgrade-diagnostic.log', errors='replace').read()
+          if len(log) > 50000:
+              log = log[-50000:]
+          body = f"XIANGNENG_UPGRADE_DIAGNOSTIC\nstatus={os.environ['STATUS']}\n```text\n{log}\n```"
+          repo = os.environ['GITHUB_REPOSITORY']
+          data = json.dumps({'body': body}).encode()
+          request = urllib.request.Request(
+              f'https://api.github.com/repos/{repo}/issues/1/comments',
+              data=data,
+              method='POST',
+              headers={
+                  'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
+                  'Accept': 'application/vnd.github+json',
+                  'Content-Type': 'application/json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'xiangneng-upgrade-diagnostic'
+              }
+          )
+          with urllib.request.urlopen(request) as response:
+              print(response.status)
+          PY
+
+      - name: Fail when diagnostic failed
+        if: steps.diagnostic.outputs.status != '0'
+        run: exit 1
