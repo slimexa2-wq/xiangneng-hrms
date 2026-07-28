@@ -1,26 +1,30 @@
 name: Diagnose public demo upgrade
 
 on:
+  push:
+    branches:
+      - agent/public-demo-20260727
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
+  issues: read
 
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     env:
-      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
     steps:
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Run upgrade diagnostics
         id: diagnostic
@@ -90,33 +94,14 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Post diagnostic result to PR
-        env:
-          STATUS: ${{ steps.diagnostic.outputs.status }}
-        run: |
-          python - <<'PY'
-          import json, os, urllib.request
-          log = open('upgrade-diagnostic.log', errors='replace').read()
-          if len(log) > 50000:
-              log = log[-50000:]
-          body = f"XIANGNENG_UPGRADE_DIAGNOSTIC\nstatus={os.environ['STATUS']}\n```text\n{log}\n```"
-          repo = os.environ['GITHUB_REPOSITORY']
-          data = json.dumps({'body': body}).encode()
-          request = urllib.request.Request(
-              f'https://api.github.com/repos/{repo}/issues/1/comments',
-              data=data,
-              method='POST',
-              headers={
-                  'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
-                  'Accept': 'application/vnd.github+json',
-                  'Content-Type': 'application/json',
-                  'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'xiangneng-upgrade-diagnostic'
-              }
-          )
-          with urllib.request.urlopen(request) as response:
-              print(response.status)
-          PY
+      - name: Upload complete diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-demo-upgrade-diagnostic-${{ github.run_id }}
+          path: upgrade-diagnostic.log
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Fail when diagnostic failed
         if: steps.diagnostic.outputs.status != '0'
