@@ -114,8 +114,7 @@ function portalAppealWhere(user: SessionUser): Prisma.PortalAppealWhereInput {
   if (branchIds.length) {
     creatorConditions.push(
       { branchId: { in: branchIds } },
-      { person: { is: { project: { branchId: { in: branchIds } } } } },
-      { internalEmployee: { is: { branchId: { in: branchIds } } } }
+      { person: { is: { project: { branchId: { in: branchIds } } } } }
     );
   }
   if (projectIds.length) {

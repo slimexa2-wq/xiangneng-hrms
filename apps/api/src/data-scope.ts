@@ -180,7 +180,6 @@ export function internalEmployeeWhere(
   user: SessionUser
 ): Prisma.InternalEmployeeWhereInput {
   if (hasGlobalScope(user)) return {};
-  const branchIds = scopeIds(user, DataScopeType.BRANCH, "branchId");
   const organizationUnitIds = [
     ...scopeIds(user, DataScopeType.ORG_UNIT, "organizationUnitId"),
     ...scopeIds(user, DataScopeType.CENTER, "organizationUnitId")
@@ -189,17 +188,12 @@ export function internalEmployeeWhere(
     (binding) => binding.type === DataScopeType.SELF
   );
   const conditions: Prisma.InternalEmployeeWhereInput[] = [];
-  if (branchIds.length) conditions.push({ branchId: { in: branchIds } });
   if (organizationUnitIds.length) {
     conditions.push({
       organizationUnit: {
         OR: [
           { id: { in: organizationUnitIds } },
-          {
-            path: {
-              contains: organizationUnitIds[0] ?? NO_ACCESS_ID
-            }
-          }
+          ...organizationUnitIds.map((id) => ({ path: { contains: id } }))
         ]
       }
     });
@@ -213,13 +207,11 @@ export function organizationUnitWhere(
   user: SessionUser
 ): Prisma.OrganizationUnitWhereInput {
   if (hasGlobalScope(user)) return {};
-  const branchIds = scopeIds(user, DataScopeType.BRANCH, "branchId");
   const organizationUnitIds = [
     ...scopeIds(user, DataScopeType.ORG_UNIT, "organizationUnitId"),
     ...scopeIds(user, DataScopeType.CENTER, "organizationUnitId")
   ];
   const conditions: Prisma.OrganizationUnitWhereInput[] = [];
-  if (branchIds.length) conditions.push({ branchId: { in: branchIds } });
   if (organizationUnitIds.length) {
     conditions.push({
       OR: [

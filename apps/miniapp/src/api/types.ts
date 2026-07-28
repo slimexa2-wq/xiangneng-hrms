@@ -1,24 +1,53 @@
 export type UserRole =
+  | "SUPER_ADMIN"
+  | "SYSTEM_ADMIN"
+  | "GROUP_LEADER"
   | "HEADQUARTERS_MANAGER"
   | "BRANCH_MANAGER"
+  | "DEPARTMENT_MANAGER"
+  | "INTERNAL_HR"
+  | "RECRUITER"
   | "PROJECT_OPERATOR"
   | "RESOURCE_SPECIALIST"
+  | "FINANCE_REVIEWER"
+  | "CASHIER"
+  | "DEPARTMENT_REIMBURSEMENT_CLERK"
+  | "SUPPLIER_ADMIN"
   | "SUPPLIER"
+  | "OUTSOURCED_EMPLOYEE"
   | "EMPLOYEE"
-  | "JOB_SEEKER"
-  | "SYSTEM_ADMIN";
+  | "JOB_SEEKER";
+
+export type DataScopeType = "SELF" | "ORG_UNIT" | "CENTER" | "BRANCH" | "PROJECT" | "SUPPLIER" | "GROUP";
+
+export type SessionScopeBinding = {
+  type: DataScopeType;
+  branchId?: string | null;
+  projectId?: string | null;
+  supplierId?: string | null;
+  organizationUnitId?: string | null;
+};
+
+export type SessionAuthorizationGrant = {
+  role: UserRole;
+  permissions: string[];
+  scopeBindings: SessionScopeBinding[];
+};
 
 export type SessionUser = {
   id: string;
   username: string;
   displayName: string;
   role: UserRole;
+  roles: UserRole[];
   branchId: string | null;
   supplierId: string | null;
   personId: string | null;
   employeeType: string | null;
   projectIds: string[];
   permissions: string[];
+  scopeBindings: SessionScopeBinding[];
+  authorizationGrants?: SessionAuthorizationGrant[];
 };
 
 export type ApiSuccess<T> = { data: T; requestId: string };
@@ -304,4 +333,119 @@ export type SupplierSettlementSummary = {
   pendingAmount: number;
   disputedAmount: number;
   items: SupplierSettlementItem[];
+};
+
+export type ReimbursementStatus =
+  | "PENDING_SUBMISSION"
+  | "DEPARTMENT_PREPARING"
+  | "OWNER_REVIEWING"
+  | "FINANCE_REVIEWING"
+  | "APPROVED"
+  | "PENDING_PAYMENT"
+  | "PAID";
+
+export type ReimbursementAttachment = {
+  id: string;
+  batchId: string;
+  lineId?: string | null;
+  type: "PAYMENT_VOUCHER" | "INVOICE" | "SUPPORTING";
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+};
+
+export type ReimbursementLine = {
+  id: string;
+  sequence: number;
+  expenseDate: string;
+  category: string;
+  description: string;
+  payeeName?: string | null;
+  payeeAccount?: string | null;
+  payeeBank?: string | null;
+  paymentCents: number;
+  invoiceCents: number;
+  attachments: ReimbursementAttachment[];
+};
+
+export type ReimbursementIssue = {
+  id: string;
+  lineId?: string | null;
+  type: string;
+  description: string;
+  status: "OPEN" | "RESOLVED";
+  resolution?: string | null;
+  raisedBy?: { id: string; displayName: string } | null;
+  resolvedBy?: { id: string; displayName: string } | null;
+  createdAt: string;
+  resolvedAt?: string | null;
+};
+
+export type ReimbursementArtifact = {
+  id: string;
+  type: "REIMBURSEMENT_FORM" | "PAYMENT_PACKAGE" | "INVOICE_PACKAGE";
+  status: "PENDING" | "GENERATED" | "FAILED";
+  originalName?: string | null;
+  error?: string | null;
+  generatedAt?: string | null;
+};
+
+export type Reimbursement = {
+  id: string;
+  code: string;
+  title: string;
+  applicantUserId: string;
+  applicant: { id: string; displayName: string };
+  branchId?: string | null;
+  branch?: { id: string; name: string } | null;
+  organizationUnitId?: string | null;
+  organizationUnit?: { id: string; name: string } | null;
+  projectId?: string | null;
+  project?: { id: string; name: string } | null;
+  supplierId?: string | null;
+  supplier?: { id: string; name: string } | null;
+  status: ReimbursementStatus;
+  totalPaymentCents: number;
+  totalInvoiceCents: number;
+  invoiceExcessCents: number;
+  version: number;
+  submittedAt?: string | null;
+  approvedAt?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lines: ReimbursementLine[];
+  attachments: ReimbursementAttachment[];
+  issues: ReimbursementIssue[];
+  approvals: Array<{
+    id: string;
+    fromStatus: ReimbursementStatus;
+    toStatus: ReimbursementStatus;
+    decision: "APPROVED" | "REJECTED" | "RETURNED";
+    comment?: string | null;
+    actor?: { id: string; displayName: string } | null;
+    createdAt: string;
+  }>;
+  payment?: {
+    id: string;
+    amountCents: number;
+    reference: string;
+    paidAt: string;
+  } | null;
+  artifacts: ReimbursementArtifact[];
+  _count?: { lines: number; issues: number; attachments: number };
+};
+
+export type ReimbursementLineInput = {
+  sequence: number;
+  expenseDate: string;
+  category: string;
+  description: string;
+  payeeName?: string | null;
+  payeeAccount?: string | null;
+  payeeBank?: string | null;
+  paymentCents: number;
+  invoiceCents: number;
 };

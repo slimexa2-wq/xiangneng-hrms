@@ -51,6 +51,7 @@ import type {
   OrganizationOptionSet,
   Reimbursement,
   ReimbursementArtifact,
+  ReimbursementAttachment,
   ReimbursementIssue,
   ReimbursementLine,
   ReimbursementStatus
@@ -59,7 +60,6 @@ import type {
 type Filters = {
   keyword?: string;
   status?: ReimbursementStatus;
-  branchId?: string;
   organizationUnitId?: string;
 };
 
@@ -76,7 +76,6 @@ type DraftLine = {
 
 type CreateValues = {
   title: string;
-  branchId?: string;
   organizationUnitId?: string;
   lines: DraftLine[];
 };
@@ -90,6 +89,7 @@ type IssueValues = {
 type PaymentValues = {
   reference: string;
   paidAt: Dayjs;
+  proofAttachmentId: string;
 };
 
 const statusItems: Array<{
@@ -237,17 +237,16 @@ export function ReimbursementsPage() {
 
   const createBatch = async (values: CreateValues) => {
     const invalid = values.lines.find(
-      (line) => line.invoiceAmount <= line.paymentAmount
+      (line) => line.invoiceAmount < line.paymentAmount
     );
     if (invalid) {
-      message.error("每条明细的发票金额都必须严格大于付款金额");
+      message.error("每条明细的发票金额不能低于付款金额");
       return;
     }
     setSubmitting(true);
     try {
       const created = await api.post<Reimbursement>("/reimbursements", {
         title: values.title,
-        branchId: values.branchId,
         organizationUnitId: values.organizationUnitId,
         lines: values.lines.map(toLinePayload)
       });
@@ -327,7 +326,8 @@ export function ReimbursementsPage() {
         expectedVersion: detail.version,
         amountCents: detail.totalPaymentCents,
         reference: values.reference,
-        paidAt: values.paidAt.toISOString()
+        paidAt: values.paidAt.toISOString(),
+        proofAttachmentId: values.proofAttachmentId
       });
       message.success("打款信息已登记，报销单已完成闭环");
       paymentForm.resetFields();
@@ -337,6 +337,29 @@ export function ReimbursementsPage() {
       message.error(getErrorMessage(error));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const uploadFinalPaymentProof: UploadProps["customRequest"] = async ({
+    file,
+    onSuccess,
+    onError
+  }) => {
+    if (!detail || !(file instanceof File)) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const attachment = await api.upload<ReimbursementAttachment>(
+        `/reimbursements/${detail.id}/attachments?type=PAYMENT_VOUCHER`,
+        formData
+      );
+      paymentForm.setFieldValue("proofAttachmentId", attachment.id);
+      message.success("最终付款凭证已上传并选中");
+      onSuccess?.({});
+      await reloadDetail();
+    } catch (error) {
+      message.error(getErrorMessage(error));
+      onError?.(error instanceof Error ? error : new Error("上传失败"));
     }
   };
 
@@ -548,16 +571,6 @@ export function ReimbursementsPage() {
             allowClear
             showSearch
             optionFilterProp="label"
-            placeholder="全部分公司"
-            style={{ width: 190 }}
-            options={options?.branches.map((item) => ({ value: item.id, label: item.name }))}
-            value={draftFilters.branchId}
-            onChange={(branchId) => setDraftFilters((value) => ({ ...value, branchId }))}
-          />
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
             placeholder="全部部门"
             style={{ width: 190 }}
             options={options?.organizationUnits.map((item) => ({ value: item.id, label: item.name }))}
@@ -619,7 +632,13 @@ export function ReimbursementsPage() {
               ) : null}
               {detail.status === "PENDING_PAYMENT" && can(Permission.REIMBURSEMENT_PAY) ? (
                 <Button type="primary" icon={<WalletOutlined />} onClick={() => {
-                  paymentForm.setFieldsValue({ paidAt: dayjs() });
+                  const finalProof = detail.attachments
+                    .filter((attachment) => attachment.type === "PAYMENT_VOUCHER" && !attachment.lineId)
+                    .at(-1);
+                  paymentForm.setFieldsValue({
+                    paidAt: dayjs(),
+                    proofAttachmentId: finalProof?.id
+                  });
                   setPaymentOpen(true);
                 }}>登记打款</Button>
               ) : null}
@@ -648,8 +667,7 @@ export function ReimbursementsPage() {
             </Row>
             <Descriptions bordered size="small" column={3}>
               <Descriptions.Item label="申请人">{detail.applicant.displayName}</Descriptions.Item>
-              <Descriptions.Item label="分公司">{detail.branch?.name ?? "集团"}</Descriptions.Item>
-              <Descriptions.Item label="部门">{detail.organizationUnit?.name ?? "—"}</Descriptions.Item>
+              <Descriptions.Item label="所属部门">{detail.organizationUnit?.name ?? "—"}</Descriptions.Item>
               <Descriptions.Item label="状态">{statusTag(detail.status)}</Descriptions.Item>
               <Descriptions.Item label="版本">V{detail.version}</Descriptions.Item>
               <Descriptions.Item label="更新时间">{formatDateTime(detail.updatedAt)}</Descriptions.Item>
@@ -784,7 +802,7 @@ export function ReimbursementsPage() {
         <Alert
           type="info"
           showIcon
-          title="金额口径：每条发票金额必须严格大于付款金额，系统同时在接口和数据库层校验。"
+          title="金额口径：每条发票金额不得低于付款金额，允许与付款金额相等；系统同时在接口和数据库层校验。"
           style={{ marginBottom: 16 }}
         />
         <Form<CreateValues> form={createForm} layout="vertical" onFinish={(values) => void createBatch(values)}>
@@ -794,13 +812,8 @@ export function ReimbursementsPage() {
                 <Input placeholder="例如：宜宾分公司七月差旅报销" />
               </Form.Item>
             </Col>
-            <Col span={12}>
-              <Form.Item name="branchId" label="分公司">
-                <Select allowClear options={options?.branches.map((item) => ({ value: item.id, label: item.name }))} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="organizationUnitId" label="部门">
+            <Col span={24}>
+              <Form.Item name="organizationUnitId" label="所属部门">
                 <Select allowClear showSearch optionFilterProp="label" options={options?.organizationUnits.map((item) => ({ value: item.id, label: item.name }))} />
               </Form.Item>
             </Col>
@@ -856,7 +869,37 @@ export function ReimbursementsPage() {
           <Descriptions.Item label="打款金额">{currency(detail?.totalPaymentCents ?? 0)}</Descriptions.Item>
           <Descriptions.Item label="收款明细">{detail?.lines.length ?? 0} 项</Descriptions.Item>
         </Descriptions>
+        <Alert
+          type="warning"
+          showIcon
+          title="最终付款凭证必须是整单级附件，不能使用某条费用明细中的原始付款截图。"
+          style={{ marginBottom: 16 }}
+        />
         <Form<PaymentValues> form={paymentForm} layout="vertical" onFinish={(values) => void recordPayment(values)}>
+          <Form.Item label="上传最终付款凭证" required>
+            <Upload
+              accept="image/*,.pdf"
+              showUploadList={false}
+              customRequest={uploadFinalPaymentProof}
+            >
+              <Button icon={<UploadOutlined />}>上传最终付款凭证</Button>
+            </Upload>
+          </Form.Item>
+          <Form.Item
+            name="proofAttachmentId"
+            label="已选付款凭证"
+            rules={[{ required: true, message: "请先上传或选择最终付款凭证" }]}
+          >
+            <Select
+              placeholder="请选择整单最终付款凭证"
+              options={detail?.attachments
+                .filter((attachment) => attachment.type === "PAYMENT_VOUCHER" && !attachment.lineId)
+                .map((attachment) => ({
+                  value: attachment.id,
+                  label: `${attachment.originalName} · ${formatDateTime(attachment.createdAt)}`
+                }))}
+            />
+          </Form.Item>
           <Form.Item name="reference" label="银行流水号" rules={[{ required: true }]}>
             <Input placeholder="请输入银行付款流水号" />
           </Form.Item>

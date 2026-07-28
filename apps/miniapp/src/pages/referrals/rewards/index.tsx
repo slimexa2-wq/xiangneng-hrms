@@ -3,12 +3,13 @@ import { AccessDenied, AsyncBoundary, FieldRow, PageShell, SectionCard, StatusTa
 import { formatDate, formatMoney } from "../../../domain/format";
 import { useAsyncData } from "../../../hooks/useAsyncData";
 import { useSession } from "../../../hooks/useSession";
+import { hasRole } from "../../../domain/roles";
 
 export default function ReferralRewardsPage() {
   const user = useSession();
   const rewards = useAsyncData(() => api.myRewards(), []);
   if (!user) return <PageShell title="推荐奖励" />;
-  if (user.role !== "EMPLOYEE") return <AccessDenied />;
+  if (!hasRole(user, "EMPLOYEE")) return <AccessDenied />;
   const items = rewards.data ? itemsOf(rewards.data) : [];
   return (
     <PageShell title="推荐奖励" subtitle="奖励金额和达成条件来自报名时绑定的政策版本">

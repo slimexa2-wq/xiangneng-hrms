@@ -20,6 +20,9 @@ export default defineAppConfig({
     "pages/referrals/mine/index",
     "pages/referrals/rewards/index",
     "pages/salary/index/index",
+    "pages/reimbursements/index/index",
+    "pages/reimbursements/form/index",
+    "pages/reimbursements/detail/index",
     "pages/profile/index/index"
   ],
   window: {

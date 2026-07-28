@@ -12,6 +12,7 @@ import {
 } from "@xiangneng/shared";
 import { z } from "zod";
 import { writeAudit } from "../audit.js";
+import { authorizationForAnyPermission, authorizationForPermission } from "../authorization.js";
 import {
   andWhere,
   reimbursementWhere
@@ -21,7 +22,11 @@ import { paginationMeta, parsePagination, success } from "../http.js";
 import { getSession } from "../plugins/auth.js";
 import {
   ReimbursementStatus,
+  assertFinalPaymentProof,
+  assertReimbursementApprovalLimit,
   buildReimbursementArtifactPlan,
+  normalizeEmployeeReimbursementScope,
+  reimbursementAttachmentUploadAuthorization,
   summarizeReimbursement,
   transitionReimbursement,
   validateReimbursementLine,
@@ -97,7 +102,7 @@ const paymentSchema = z.object({
   amountCents: z.number().int().positive(),
   reference: z.string().trim().min(1).max(120),
   paidAt: z.coerce.date(),
-  proofAttachmentId: idSchema.optional().nullable()
+  proofAttachmentId: idSchema
 });
 const attachmentQuerySchema = z.object({
   type: z.enum(["PAYMENT_VOUCHER", "INVOICE", "SUPPORTING"]),
@@ -117,6 +122,10 @@ const listInclude = {
   organizationUnit: { select: { id: true, name: true } },
   project: { select: { id: true, name: true } },
   supplier: { select: { id: true, name: true } },
+  issues: {
+    where: { status: "OPEN" as const },
+    select: { id: true, status: true }
+  },
   _count: { select: { lines: true, issues: true, attachments: true } }
 };
 const detailInclude = {
@@ -196,45 +205,10 @@ type ReimbursementCreateScope = Pick<
   "branchId" | "organizationUnitId" | "projectId" | "supplierId"
 >;
 
-function normalizeCreateScope(
+function normalizeManagedCreateScope(
   user: SessionUser,
   input: ReimbursementCreateScope
 ): ReimbursementCreateScope {
-  if (
-    user.permissions.includes(Permission.REIMBURSEMENT_SELF) &&
-    !user.permissions.includes(Permission.REIMBURSEMENT_MANAGE)
-  ) {
-    const allowed = {
-      branchId: [
-        user.branchId,
-        ...user.scopeBindings.filter((binding) => binding.type === DataScopeType.BRANCH).map((binding) => binding.branchId)
-      ].filter((value): value is string => Boolean(value)),
-      organizationUnitId: user.scopeBindings
-        .filter((binding) => binding.type === DataScopeType.ORG_UNIT || binding.type === DataScopeType.CENTER)
-        .map((binding) => binding.organizationUnitId)
-        .filter((value): value is string => Boolean(value)),
-      projectId: user.scopeBindings
-        .filter((binding) => binding.type === DataScopeType.PROJECT)
-        .map((binding) => binding.projectId)
-        .filter((value): value is string => Boolean(value)),
-      supplierId: user.scopeBindings
-        .filter((binding) => binding.type === DataScopeType.SUPPLIER)
-        .map((binding) => binding.supplierId)
-        .filter((value): value is string => Boolean(value))
-    };
-    for (const key of ["branchId", "organizationUnitId", "projectId", "supplierId"] as const) {
-      const requested = input[key];
-      if (requested && !allowed[key].includes(requested)) {
-        throw new AppError(403, "OUT_OF_SCOPE", "员工自助报销不能指定当前登录态范围外的业务归属");
-      }
-    }
-    return {
-      branchId: input.branchId ?? allowed.branchId[0] ?? null,
-      organizationUnitId: input.organizationUnitId ?? null,
-      projectId: input.projectId ?? null,
-      supplierId: input.supplierId ?? null
-    };
-  }
   if (
     !isWithinDataScope(scopeContext(user), {
       ownerUserId: user.id,
@@ -304,7 +278,7 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [app.authenticate, requireAnyPermission(readPermissions)]
   }, async (request) => {
     const query = querySchema.parse(request.query);
-    const user = getSession(request);
+    const user = authorizationForAnyPermission(getSession(request), readPermissions);
     const { page, pageSize, skip } = parsePagination(query);
     const where = andWhere(reimbursementWhere(user), {
       status: query.status,
@@ -344,7 +318,8 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [app.authenticate, requireAnyPermission(readPermissions)]
   }, async (request) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    return success(request, await scopedBatch(app, getSession(request), id));
+    const user = authorizationForAnyPermission(getSession(request), readPermissions);
+    return success(request, await scopedBatch(app, user, id));
   });
 
   app.post("/reimbursements", {
@@ -357,11 +332,28 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
     ]
   }, async (request, reply) => {
     const input = createSchema.parse(request.body);
-    const user = getSession(request);
+    const session = getSession(request);
+    const createPermission = session.permissions.includes(Permission.REIMBURSEMENT_SELF)
+      ? Permission.REIMBURSEMENT_SELF
+      : Permission.REIMBURSEMENT_MANAGE;
+    const user = authorizationForPermission(session, createPermission);
     input.lines.forEach(validateReimbursementLine);
     const { lineCount: _lineCount, ...summary } =
       summarizeReimbursement(input.lines);
-    const createScope = normalizeCreateScope(user, input);
+    const createScope = createPermission === Permission.REIMBURSEMENT_SELF
+      ? normalizeEmployeeReimbursementScope(
+          input,
+          await app.prisma.internalEmployee.findFirst({
+            where: { userId: user.id, status: "ACTIVE" },
+            select: { organizationUnitId: true }
+          }).then((employee) => {
+            if (!employee) {
+              throw new AppError(409, "INTERNAL_EMPLOYEE_PROFILE_REQUIRED", "发起报销前请先绑定有效的内部员工档案");
+            }
+            return employee;
+          })
+        )
+      : normalizeManagedCreateScope(user, input);
     const created = await app.prisma.$transaction(async (tx) => {
       const batch = await tx.reimbursementBatch.create({
         data: {
@@ -414,8 +406,18 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
   }, async (request) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const input = patchSchema.parse(request.body);
-    const user = getSession(request);
-    const before = await scopedBatch(app, user, id);
+    const session = getSession(request);
+    const candidateUser = authorizationForAnyPermission(session, [
+      Permission.REIMBURSEMENT_SELF,
+      Permission.REIMBURSEMENT_MANAGE
+    ]);
+    let before = await scopedBatch(app, candidateUser, id);
+    const editPermission = before.applicantUserId === session.id &&
+      session.permissions.includes(Permission.REIMBURSEMENT_SELF)
+      ? Permission.REIMBURSEMENT_SELF
+      : Permission.REIMBURSEMENT_MANAGE;
+    const user = authorizationForPermission(session, editPermission);
+    before = await scopedBatch(app, user, id);
     if (
       before.status !== ReimbursementStatus.PENDING_SUBMISSION &&
       before.status !== ReimbursementStatus.DEPARTMENT_PREPARING
@@ -498,11 +500,33 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
   }, async (request) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const input = transitionSchema.parse(request.body);
-    const user = getSession(request);
-    const before = await scopedBatch(app, user, id);
-    const permission = transitionPermission(input.targetStatus, user, before.applicantUserId);
+    const session = getSession(request);
+    const candidateUser = authorizationForAnyPermission(session, readPermissions);
+    let before = await scopedBatch(app, candidateUser, id);
+    const permission = transitionPermission(input.targetStatus, session, before.applicantUserId);
+    const user = authorizationForPermission(session, permission);
+    before = await scopedBatch(app, user, id);
     if (!user.permissions.includes(permission)) {
       throw new AppError(403, "FORBIDDEN", "当前账号不能执行该报销流转");
+    }
+    if (permission === Permission.REIMBURSEMENT_APPROVE) {
+      const approver = await app.prisma.internalEmployee.findFirst({
+        where: { userId: user.id, status: "ACTIVE" },
+        select: {
+          jobGrade: {
+            select: {
+              reimbursementApprovalPolicy: {
+                select: { maxReimbursementApprovalCents: true, isActive: true }
+              }
+            }
+          }
+        }
+      });
+      const policy = approver?.jobGrade?.reimbursementApprovalPolicy;
+      assertReimbursementApprovalLimit(
+        before.totalPaymentCents,
+        policy?.isActive ? policy.maxReimbursementApprovalCents : null
+      );
     }
     const updated = await app.prisma.$transaction(async (tx) => {
       const value = await transitionReimbursement(tx, {
@@ -534,37 +558,47 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
       app.authenticate,
       requireAnyPermission([
         Permission.REIMBURSEMENT_SELF,
-        Permission.REIMBURSEMENT_MANAGE
+        Permission.REIMBURSEMENT_MANAGE,
+        Permission.REIMBURSEMENT_PAY
       ])
     ]
   }, async (request, reply) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const query = attachmentQuerySchema.parse(request.query);
-    const user = getSession(request);
-    const batch = await scopedBatch(app, user, id);
-    if (
-      batch.status !== ReimbursementStatus.PENDING_SUBMISSION &&
-      batch.status !== ReimbursementStatus.DEPARTMENT_PREPARING
-    ) {
-      throw new AppError(409, "REIMBURSEMENT_ATTACHMENTS_LOCKED", "报销单已进入审核，不能再修改附件");
+    const session = getSession(request);
+    const candidateUser = authorizationForAnyPermission(session, [
+      Permission.REIMBURSEMENT_SELF,
+      Permission.REIMBURSEMENT_MANAGE,
+      Permission.REIMBURSEMENT_PAY
+    ]);
+    let batch = await scopedBatch(app, candidateUser, id);
+    const uploadAccess = reimbursementAttachmentUploadAuthorization({
+      status: batch.status,
+      applicantUserId: batch.applicantUserId,
+      userId: session.id,
+      permissions: session.permissions,
+      type: query.type,
+      lineId: query.lineId,
+      openIssueCount: batch.issues.filter((issue) => issue.status === "OPEN").length
+    });
+    if (!uploadAccess) {
+      throw new AppError(
+        409,
+        "REIMBURSEMENT_ATTACHMENTS_LOCKED",
+        "当前报销节点不允许上传该类型材料"
+      );
     }
-    if (
-      batch.applicantUserId !== user.id &&
-      !user.permissions.includes(Permission.REIMBURSEMENT_MANAGE)
-    ) {
-      throw new AppError(403, "FORBIDDEN", "只能维护自己的报销附件");
-    }
+    const user = authorizationForPermission(session, uploadAccess.permission);
+    batch = await scopedBatch(app, user, id);
+    const isFinalPaymentProof = uploadAccess.mode === "FINAL_PAYMENT_PROOF";
     if (query.lineId && !batch.lines.some((line) => line.id === query.lineId)) {
       notFound("报销明细");
     }
-    if (
-      query.type !== "SUPPORTING" &&
-      !query.lineId
-    ) {
+    if (query.type !== "SUPPORTING" && !query.lineId && !isFinalPaymentProof) {
       throw new AppError(
         400,
         "REIMBURSEMENT_LINE_REQUIRED",
-        "付款凭证和发票必须关联到具体报销明细"
+        "报销阶段的付款凭证和发票必须关联到具体报销明细"
       );
     }
     const upload = await request.file();
@@ -631,7 +665,7 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
       id: idSchema,
       attachmentId: idSchema
     }).parse(request.params);
-    const user = getSession(request);
+    const user = authorizationForAnyPermission(getSession(request), readPermissions);
     await scopedBatch(app, user, id);
     const attachment = await app.prisma.reimbursementAttachment.findFirst({
       where: { id: attachmentId, batchId: id }
@@ -654,7 +688,10 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
   }, async (request) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const input = artifactSchema.parse(request.body);
-    const user = getSession(request);
+    const user = authorizationForPermission(
+      getSession(request),
+      Permission.REIMBURSEMENT_EXPORT
+    );
     const batch = await scopedBatch(app, user, id);
     if (
       batch.status !== ReimbursementStatus.APPROVED &&
@@ -796,7 +833,10 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
       id: idSchema,
       artifactId: idSchema
     }).parse(request.params);
-    const user = getSession(request);
+    const user = authorizationForPermission(
+      getSession(request),
+      Permission.REIMBURSEMENT_EXPORT
+    );
     await scopedBatch(app, user, id);
     const artifact = await app.prisma.reimbursementArtifact.findFirst({
       where: {
@@ -831,7 +871,11 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const input = issueSchema.parse(request.body);
-    const user = getSession(request);
+    const user = authorizationForAnyPermission(getSession(request), [
+      Permission.REIMBURSEMENT_MANAGE,
+      Permission.REIMBURSEMENT_APPROVE,
+      Permission.REIMBURSEMENT_FINANCE_REVIEW
+    ]);
     await scopedBatch(app, user, id);
     const issue = await app.prisma.$transaction(async (tx) => {
       if (input.lineId) {
@@ -882,7 +926,11 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
       issueId: idSchema
     }).parse(request.params);
     const input = resolveIssueSchema.parse(request.body);
-    const user = getSession(request);
+    const user = authorizationForAnyPermission(getSession(request), [
+      Permission.REIMBURSEMENT_MANAGE,
+      Permission.REIMBURSEMENT_APPROVE,
+      Permission.REIMBURSEMENT_FINANCE_REVIEW
+    ]);
     await scopedBatch(app, user, id);
     const issue = await app.prisma.reimbursementIssue.findFirst({
       where: { id: issueId, batchId: id }
@@ -925,7 +973,10 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const input = paymentSchema.parse(request.body);
-    const user = getSession(request);
+    const user = authorizationForPermission(
+      getSession(request),
+      Permission.REIMBURSEMENT_PAY
+    );
     const before = await scopedBatch(app, user, id);
     if (before.status !== ReimbursementStatus.PENDING_PAYMENT) {
       throw new AppError(409, "REIMBURSEMENT_NOT_PAYABLE", "报销单尚未进入待打款状态");
@@ -933,14 +984,7 @@ export async function reimbursementRoutes(app: FastifyInstance): Promise<void> {
     if (before.totalPaymentCents !== input.amountCents) {
       throw new AppError(400, "PAYMENT_AMOUNT_MISMATCH", "打款金额必须与报销付款合计一致");
     }
-    if (input.proofAttachmentId) {
-      const proof = before.attachments.find(
-        (attachment) => attachment.id === input.proofAttachmentId
-      );
-      if (!proof || proof.type !== "PAYMENT_VOUCHER") {
-        throw new AppError(400, "INVALID_PAYMENT_PROOF", "付款凭证不属于当前报销单");
-      }
-    }
+    assertFinalPaymentProof(before.attachments, input.proofAttachmentId);
     const payment = await app.prisma.$transaction(async (tx) => {
       const created = await tx.reimbursementPayment.create({
         data: {

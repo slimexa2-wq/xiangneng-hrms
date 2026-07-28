@@ -114,6 +114,8 @@ enum AiActionStatus {
   FAILED
 }
 
+/// LEGAL_ENTITY and BRANCH remain only for migration compatibility.
+/// Active internal organization nodes use GROUP, CENTER and DEPARTMENT.
 enum OrganizationUnitType {
   GROUP
   LEGAL_ENTITY
@@ -136,12 +138,21 @@ enum InternalEmployeeChangeType {
   ENABLE
   OFFBOARD
   ARCHIVE
+  ACCOUNT_BIND
+  ACCOUNT_UNBIND
 }
 
 enum RoleAssignmentStatus {
   ACTIVE
   REVOKED
   EXPIRED
+}
+
+enum RoleAssignmentSource {
+  MANUAL
+  POSITION
+  TEMPORARY
+  LEGACY
 }
 
 enum DataScopeType {
@@ -202,9 +213,6 @@ model Branch {
   updatedAt  DateTime  @updatedAt @map("updated_at")
   projects   Project[]
   users      User[]
-  organizationUnits OrganizationUnit[]
-  internalEmployees InternalEmployee[]
-  internalEmployments InternalEmployment[]
   dataScopeBindings DataScopeBinding[]
   reimbursementBatches ReimbursementBatch[]
 
@@ -219,7 +227,6 @@ model LegalEntity {
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-  organizationUnits OrganizationUnit[]
   internalEmployees InternalEmployee[]
   employments InternalEmployment[]
 
@@ -233,8 +240,6 @@ model OrganizationUnit {
   name          String               @db.VarChar(200)
   type          OrganizationUnitType
   parentId      String?              @map("parent_id") @db.Uuid
-  legalEntityId String?              @map("legal_entity_id") @db.Uuid
-  branchId      String?              @map("branch_id") @db.Uuid
   path          String               @db.VarChar(1000)
   sortOrder     Int                  @default(0) @map("sort_order")
   isActive      Boolean              @default(true) @map("is_active")
@@ -242,8 +247,6 @@ model OrganizationUnit {
   updatedAt     DateTime             @updatedAt @map("updated_at")
   parent        OrganizationUnit?    @relation("OrganizationUnitTree", fields: [parentId], references: [id], onDelete: Restrict)
   children      OrganizationUnit[]   @relation("OrganizationUnitTree")
-  legalEntity   LegalEntity?         @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
-  branch        Branch?              @relation(fields: [branchId], references: [id], onDelete: Restrict)
   positions     Position[]
   internalEmployees InternalEmployee[]
   employments   InternalEmployment[]
@@ -252,8 +255,6 @@ model OrganizationUnit {
 
   @@unique([parentId, name])
   @@index([parentId, sortOrder])
-  @@index([legalEntityId, type, isActive])
-  @@index([branchId, type, isActive])
   @@index([path])
   @@map("organization_units")
 }
@@ -270,6 +271,7 @@ model Position {
   organizationUnit   OrganizationUnit? @relation(fields: [organizationUnitId], references: [id], onDelete: Restrict)
   internalEmployees  InternalEmployee[]
   employments        InternalEmployment[]
+  roleBindings       PositionRoleBinding[]
 
   @@index([organizationUnitId, isActive])
   @@index([name])
@@ -287,9 +289,23 @@ model JobGrade {
   updatedAt   DateTime @updatedAt @map("updated_at")
   internalEmployees InternalEmployee[]
   employments InternalEmployment[]
+  reimbursementApprovalPolicy JobGradeApprovalPolicy?
 
   @@index([level, isActive])
   @@map("job_grades")
+}
+
+model JobGradeApprovalPolicy {
+  id                            String   @id @default(uuid()) @db.Uuid
+  jobGradeId                    String   @unique @map("job_grade_id") @db.Uuid
+  maxReimbursementApprovalCents Int?     @map("max_reimbursement_approval_cents")
+  isActive                      Boolean  @default(true) @map("is_active")
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+  jobGrade                      JobGrade @relation(fields: [jobGradeId], references: [id], onDelete: Cascade)
+
+  @@index([isActive, jobGradeId])
+  @@map("job_grade_approval_policies")
 }
 
 model InternalEmployee {
@@ -301,7 +317,6 @@ model InternalEmployee {
   idCard             String                 @unique @map("id_card") @db.VarChar(32)
   email              String?                @db.VarChar(200)
   legalEntityId      String?                @map("legal_entity_id") @db.Uuid
-  branchId           String?                @map("branch_id") @db.Uuid
   organizationUnitId String?                @map("organization_unit_id") @db.Uuid
   positionId         String?                @map("position_id") @db.Uuid
   jobGradeId         String?                @map("job_grade_id") @db.Uuid
@@ -314,7 +329,6 @@ model InternalEmployee {
   updatedAt          DateTime               @updatedAt @map("updated_at")
   user               User?                  @relation("InternalEmployeeUser", fields: [userId], references: [id], onDelete: Restrict)
   legalEntity        LegalEntity?           @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
-  branch             Branch?                @relation(fields: [branchId], references: [id], onDelete: Restrict)
   organizationUnit   OrganizationUnit?      @relation(fields: [organizationUnitId], references: [id], onDelete: Restrict)
   position           Position?              @relation(fields: [positionId], references: [id], onDelete: Restrict)
   jobGrade           JobGrade?              @relation(fields: [jobGradeId], references: [id], onDelete: Restrict)
@@ -322,7 +336,7 @@ model InternalEmployee {
   changes            InternalEmployeeChange[]
 
   @@unique([id, version])
-  @@index([status, branchId, organizationUnitId])
+  @@index([status, organizationUnitId])
   @@index([legalEntityId, status])
   @@index([positionId, status])
   @@index([name])
@@ -333,7 +347,6 @@ model InternalEmployment {
   id                 String   @id @default(uuid()) @db.Uuid
   employeeId         String   @map("employee_id") @db.Uuid
   legalEntityId      String?  @map("legal_entity_id") @db.Uuid
-  branchId           String?  @map("branch_id") @db.Uuid
   organizationUnitId String   @map("organization_unit_id") @db.Uuid
   positionId         String   @map("position_id") @db.Uuid
   jobGradeId         String?  @map("job_grade_id") @db.Uuid
@@ -344,14 +357,12 @@ model InternalEmployment {
   createdAt          DateTime @default(now()) @map("created_at")
   employee           InternalEmployee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   legalEntity        LegalEntity? @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
-  branch             Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
   organizationUnit   OrganizationUnit @relation(fields: [organizationUnitId], references: [id], onDelete: Restrict)
   position           Position @relation(fields: [positionId], references: [id], onDelete: Restrict)
   jobGrade           JobGrade? @relation(fields: [jobGradeId], references: [id], onDelete: Restrict)
 
   @@index([employeeId, endedAt])
   @@index([organizationUnitId, endedAt])
-  @@index([branchId, endedAt])
   @@index([positionId, endedAt])
   @@map("internal_employments")
 }
@@ -728,9 +739,29 @@ model Role {
   updatedAt   DateTime @updatedAt @map("updated_at")
   permissions RolePermission[]
   assignments UserRoleAssignment[]
+  positionBindings PositionRoleBinding[]
 
   @@index([isActive, name])
   @@map("roles")
+}
+
+
+model PositionRoleBinding {
+  id         String        @id @default(uuid()) @db.Uuid
+  positionId String        @map("position_id") @db.Uuid
+  roleId     String        @map("role_id") @db.Uuid
+  scopeType  DataScopeType @map("scope_type")
+  isActive   Boolean       @default(true) @map("is_active")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  position   Position      @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  role       Role          @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignments UserRoleAssignment[]
+
+  @@unique([positionId, roleId, scopeType])
+  @@index([positionId, isActive])
+  @@index([roleId, isActive])
+  @@map("position_role_bindings")
 }
 
 model PermissionDefinition {
@@ -763,6 +794,8 @@ model UserRoleAssignment {
   userId      String               @map("user_id") @db.Uuid
   roleId      String               @map("role_id") @db.Uuid
   status      RoleAssignmentStatus @default(ACTIVE)
+  source      RoleAssignmentSource @default(MANUAL)
+  positionRoleBindingId String?    @map("position_role_binding_id") @db.Uuid
   validFrom   DateTime             @default(now()) @map("valid_from")
   validTo     DateTime?            @map("valid_to")
   createdById String?              @map("created_by_id") @db.Uuid
@@ -772,11 +805,14 @@ model UserRoleAssignment {
   updatedAt   DateTime             @updatedAt @map("updated_at")
   user        User                 @relation("UserAssignedRoles", fields: [userId], references: [id], onDelete: Cascade)
   role        Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  positionRoleBinding PositionRoleBinding? @relation(fields: [positionRoleBindingId], references: [id], onDelete: SetNull)
   scopes      DataScopeBinding[]
 
   @@unique([userId, roleId, validFrom])
   @@index([userId, status, validTo])
   @@index([roleId, status])
+  @@index([userId, source, status])
+  @@index([positionRoleBindingId, status])
   @@index([createdById, createdAt])
   @@index([revokedById, revokedAt])
   @@map("user_role_assignments")

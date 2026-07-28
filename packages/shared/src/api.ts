@@ -16,6 +16,20 @@ export type PaginationMeta = {
 
 export type Paginated<T> = { items: T[]; pagination: PaginationMeta };
 
+export type SessionScopeBinding = {
+  type: DataScopeType;
+  organizationUnitId: string | null;
+  branchId: string | null;
+  projectId: string | null;
+  supplierId: string | null;
+};
+
+export type SessionAuthorizationGrant = {
+  role: UserRoleValue;
+  permissions: Permission[];
+  scopeBindings: SessionScopeBinding[];
+};
+
 export type SessionUser = {
   id: string;
   username: string;
@@ -28,13 +42,8 @@ export type SessionUser = {
   employeeType: string | null;
   projectIds: string[];
   permissions: Permission[];
-  scopeBindings: Array<{
-    type: DataScopeType;
-    organizationUnitId: string | null;
-    branchId: string | null;
-    projectId: string | null;
-    supplierId: string | null;
-  }>;
+  scopeBindings: SessionScopeBinding[];
+  authorizationGrants?: SessionAuthorizationGrant[];
 };
 
 export type ImportPreview<T> = {

@@ -5,13 +5,14 @@ import { ReimbursementsPage } from "./ReimbursementsPage";
 
 const apiGet = vi.fn();
 const apiPost = vi.fn();
+const apiUpload = vi.fn();
 
 vi.mock("../lib/api", () => ({
   api: {
     get: (...args: unknown[]) => apiGet(...args),
     post: (...args: unknown[]) => apiPost(...args),
     patch: vi.fn(),
-    upload: vi.fn(),
+    upload: (...args: unknown[]) => apiUpload(...args),
     download: vi.fn()
   },
   getErrorMessage: (error: unknown) =>
@@ -32,8 +33,7 @@ const detail = {
   title: "宜宾分公司七月差旅报销",
   applicantUserId: "user-1",
   applicant: { id: "user-1", displayName: "张伟" },
-  branch: { id: "branch-1", name: "宜宾分公司" },
-  organizationUnit: { id: "org-1", name: "运营管理部" },
+  organizationUnit: { id: "org-1", name: "宜宾分公司" },
   status: "DEPARTMENT_PREPARING",
   totalPaymentCents: 2_800_000,
   totalInvoiceCents: 2_820_000,
@@ -63,11 +63,11 @@ describe("ReimbursementsPage", () => {
   beforeEach(() => {
     apiGet.mockReset();
     apiPost.mockReset();
+    apiUpload.mockReset();
     apiGet.mockImplementation((path: string) => {
       if (path === "/organization/options") {
         return Promise.resolve({
-          branches: [{ id: "branch-1", name: "宜宾分公司" }],
-          organizationUnits: [{ id: "org-1", name: "运营管理部", type: "DEPARTMENT" }],
+          organizationUnits: [{ id: "org-1", name: "宜宾分公司", type: "DEPARTMENT" }],
           legalEntities: [],
           positions: [],
           jobGrades: []
@@ -98,4 +98,31 @@ describe("ReimbursementsPage", () => {
     expect(screen.getAllByText("财务审核中").length).toBeGreaterThan(0);
     expect(screen.getAllByText("已打款").length).toBeGreaterThan(0);
   }, 15_000);
+
+  it("待付款报销必须先上传并选择整单最终付款凭证", async () => {
+    const pendingPayment = { ...detail, status: "PENDING_PAYMENT", attachments: [] };
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/organization/options") {
+        return Promise.resolve({
+          organizationUnits: [{ id: "org-1", name: "宜宾分公司", type: "DEPARTMENT" }],
+          legalEntities: [],
+          positions: [],
+          jobGrades: []
+        });
+      }
+      if (path === "/reimbursements/batch-1") return Promise.resolve(pendingPayment);
+      return Promise.resolve({
+        items: [pendingPayment],
+        pagination: { page: 1, pageSize: 20, total: 1 }
+      });
+    });
+
+    render(<App><ReimbursementsPage /></App>);
+    fireEvent.click(await screen.findByRole("button", { name: "查看与处理" }));
+    fireEvent.click(await screen.findByRole("button", { name: "登记打款" }));
+
+    expect(await screen.findByRole("button", { name: "上传最终付款凭证" })).toBeInTheDocument();
+    expect(screen.getByText("最终付款凭证必须是整单级附件，不能使用某条费用明细中的原始付款截图。")).toBeInTheDocument();
+  }, 15_000);
+
 });

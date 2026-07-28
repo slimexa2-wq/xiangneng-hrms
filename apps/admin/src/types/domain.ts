@@ -57,11 +57,22 @@ export type OrganizationUnit = {
   id: string;
   code: string;
   name: string;
-  type: "GROUP" | "LEGAL_ENTITY" | "BRANCH" | "CENTER" | "DEPARTMENT";
+  type: "GROUP" | "CENTER" | "DEPARTMENT";
   parentId?: Nullable<string>;
-  legalEntityId?: Nullable<string>;
-  branchId?: Nullable<string>;
   path: string;
+};
+
+export type PositionRoleBindingOption = {
+  id: string;
+  positionId: string;
+  scopeType: "SELF" | "ORG_UNIT" | "CENTER" | "GROUP";
+  role: { id: string; code: UserRole; name: string };
+};
+
+export type JobGradeApprovalPolicyOption = {
+  id: string;
+  jobGradeId: string;
+  maxReimbursementApprovalCents?: Nullable<number>;
 };
 
 export type OrganizationOptionSet = {
@@ -70,6 +81,15 @@ export type OrganizationOptionSet = {
   organizationUnits: OrganizationUnit[];
   positions: Array<{ id: string; code: string; name: string; organizationUnitId?: Nullable<string> }>;
   jobGrades: Array<{ id: string; code: string; name: string; level: number }>;
+  roles?: Array<{ id: string; code: UserRole; name: string }>;
+  positionRoleBindings?: PositionRoleBindingOption[];
+  jobGradeApprovalPolicies?: JobGradeApprovalPolicyOption[];
+  accounts?: Array<{
+    id: string;
+    username: string;
+    displayName: string;
+    internalEmployee?: Nullable<{ id: string; employeeNo: string; name: string }>;
+  }>;
 };
 
 export type InternalEmployment = {
@@ -79,7 +99,6 @@ export type InternalEmployment = {
   isPrimary: boolean;
   reason?: Nullable<string>;
   legalEntity?: Nullable<{ id: string; name: string }>;
-  branch?: Nullable<Branch>;
   organizationUnit: { id: string; name: string };
   position: { id: string; name: string };
   jobGrade?: Nullable<{ id: string; name: string }>;
@@ -87,7 +106,7 @@ export type InternalEmployment = {
 
 export type InternalEmployeeChange = {
   id: string;
-  type: "ONBOARD" | "TRANSFER" | "DISABLE" | "ENABLE" | "OFFBOARD" | "ARCHIVE";
+  type: "ONBOARD" | "TRANSFER" | "DISABLE" | "ENABLE" | "OFFBOARD" | "ARCHIVE" | "ACCOUNT_BIND" | "ACCOUNT_UNBIND";
   effectiveAt: string;
   reason?: Nullable<string>;
   before?: unknown;
@@ -99,12 +118,12 @@ export type InternalEmployee = {
   id: string;
   employeeNo: string;
   userId?: Nullable<string>;
+  user?: Nullable<{ id: string; username: string; displayName: string; isActive: boolean }>;
   name: string;
   phone: string;
   idCard: string;
   email?: Nullable<string>;
   legalEntityId?: Nullable<string>;
-  branchId?: Nullable<string>;
   organizationUnitId?: Nullable<string>;
   positionId?: Nullable<string>;
   jobGradeId?: Nullable<string>;
@@ -114,7 +133,6 @@ export type InternalEmployee = {
   offboardReason?: Nullable<string>;
   version: number;
   legalEntity?: Nullable<{ id: string; code: string; name: string }>;
-  branch?: Nullable<Branch>;
   organizationUnit?: Nullable<OrganizationUnit>;
   position?: Nullable<{ id: string; code: string; name: string }>;
   jobGrade?: Nullable<{ id: string; code: string; name: string; level: number }>;
