@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: read
 
 jobs:
@@ -94,14 +94,25 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Upload complete diagnostic log
+      - name: Publish complete diagnostic log
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-demo-upgrade-diagnostic-${{ github.run_id }}
-          path: upgrade-diagnostic.log
-          if-no-files-found: error
-          retention-days: 7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/xiangneng-upgrade-debug
+          mkdir -p /tmp/xiangneng-upgrade-debug
+          cp upgrade-diagnostic.log /tmp/xiangneng-upgrade-debug/UPGRADE_DIAGNOSTIC_LOG.txt
+          printf '%s\n' "sourceCommit=${SOURCE_SHA}" "diagnosticStatus=${{ steps.diagnostic.outputs.status }}" > /tmp/xiangneng-upgrade-debug/STATUS.txt
+          cd /tmp/xiangneng-upgrade-debug
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo-upgrade-debug
+          git add UPGRADE_DIAGNOSTIC_LOG.txt STATUS.txt
+          git commit -m "debug: public demo upgrade ${SOURCE_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo-upgrade-debug
 
       - name: Fail when diagnostic failed
         if: steps.diagnostic.outputs.status != '0'
