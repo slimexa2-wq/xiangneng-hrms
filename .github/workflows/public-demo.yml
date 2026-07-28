@@ -29,29 +29,36 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Reconstruct verified upgrade bundle
+      - name: Collect all marker comments
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
         run: |
           set -euo pipefail
-          rm -rf /tmp/xiangneng-upgrade-patches /tmp/xiangneng-upgrade-bundle.tar.xz
+          rm -rf /tmp/xiangneng-upgrade-patches /tmp/xiangneng-upgrade-bundle.tar.xz /tmp/xiangneng-upgrade-bundle.b64
           mkdir -p /tmp/xiangneng-upgrade-patches
           python - <<'PY'
-          import base64, hashlib, json, os, re, urllib.request
+          import json, os, re, urllib.request
 
           repo = os.environ['GITHUB_REPOSITORY']
-          request = urllib.request.Request(
-              f'https://api.github.com/repos/{repo}/issues/1/comments?per_page=100',
-              headers={
-                  'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
-                  'Accept': 'application/vnd.github+json',
-                  'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'xiangneng-public-demo-builder'
-              }
-          )
-          with urllib.request.urlopen(request) as response:
-              comments = json.load(response)
+          token = os.environ['GH_TOKEN']
+          comments = []
+          page = 1
+          while True:
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/issues/1/comments?per_page=100&page={page}',
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'xiangneng-public-demo-builder'
+                  }
+              )
+              with urllib.request.urlopen(request) as response:
+                  batch = json.load(response)
+              comments.extend(batch)
+              if len(batch) < 100:
+                  break
+              page += 1
 
           marker = re.compile(r'^XIANGNENG_PATCH_PART_(\d{2})_12$')
           parts = {}
@@ -72,7 +79,7 @@ jobs:
 
           expected = list(range(1, 13))
           if sorted(parts) != expected:
-              raise SystemExit(f'parts mismatch: found={sorted(parts)} expected={expected}')
+              raise SystemExit(f'parts mismatch: found={sorted(parts)} expected={expected}; comments={len(comments)} pages={page}')
           for part in range(1, 12):
               if len(parts[part]) != 15000:
                   raise SystemExit(f'part {part:02d} length={len(parts[part])} expected=15000')
@@ -80,17 +87,36 @@ jobs:
               raise SystemExit(f'part 12 length={len(parts[12])} expected=13832')
 
           joined = ''.join(parts[part] for part in expected)
-          archive = base64.b64decode(joined, validate=True)
+          with open('/tmp/xiangneng-upgrade-bundle.b64', 'w') as handle:
+              handle.write(joined)
+          print(f'Collected marker bundle: comments={len(comments)} pages={page} parts=12 base64={len(joined)}')
+          PY
+
+      - name: Decode and verify marker bundle
+        env:
+          EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, hashlib, os
+          encoded = open('/tmp/xiangneng-upgrade-bundle.b64').read()
+          archive = base64.b64decode(encoded, validate=True)
           actual_sha = hashlib.sha256(archive).hexdigest()
           if actual_sha != os.environ['EXPECTED_SHA256']:
-              raise SystemExit(f'sha256 mismatch: actual={actual_sha}')
+              raise SystemExit(f'sha256 mismatch: actual={actual_sha} expected={os.environ["EXPECTED_SHA256"]}')
           with open('/tmp/xiangneng-upgrade-bundle.tar.xz', 'wb') as handle:
               handle.write(archive)
-          print(f'Validated marker bundle: parts=12 base64={len(joined)} bytes={len(archive)} sha256={actual_sha}')
+          print(f'Validated marker bundle: bytes={len(archive)} sha256={actual_sha}')
           PY
+
+      - name: Extract verified upgrade bundle
+        run: |
+          set -euo pipefail
           tar -tJf /tmp/xiangneng-upgrade-bundle.tar.xz
           tar -xJf /tmp/xiangneng-upgrade-bundle.tar.xz -C /tmp/xiangneng-upgrade-patches
-          test "$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*.patch' | wc -l)" -eq 3
+          patch_count=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*.patch' | wc -l)
+          echo "Extracted patch count: ${patch_count}"
+          test "${patch_count}" -eq 3
 
       - name: Apply verified upgrade patches
         run: |
