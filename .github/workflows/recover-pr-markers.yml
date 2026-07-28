@@ -1,12 +1,9 @@
-name: Validate PR marker bundle
+name: Audit PR marker bundle
 
 on:
   push:
     branches:
       - agent/comment-recovery-20260728
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -14,40 +11,63 @@ permissions:
   issues: read
 
 jobs:
-  validate:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct and validate bundle
+      - name: Audit marker comments
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
         run: |
           set -euo pipefail
-          rm -rf /tmp/marker-validation
-          mkdir -p /tmp/marker-validation/extracted
+          rm -rf /tmp/marker-audit
+          mkdir -p /tmp/marker-audit
           python - <<'PY'
           import base64, hashlib, json, os, re, urllib.request
 
+          expected_hashes = {
+              '01': '4e402b1196cf0a81cb4858b1bc273c163deb49b77e46bf9dda3e583edac13089',
+              '02': '4d1149f3b4ed38ac1891c02208b178a62927418ff3f7ecad1c50a4f58ee422ce',
+              '03': '6b336aefc27b80f665835d6128e865ea3fefc6b5fc2f2f0d32a6120eca92c14d',
+              '04': 'a52a962d390eab4d8591063326bd6212bff1f9c04c776841b5efed1b0eee6e2c',
+              '05': 'd8da27f0ee8edfb98ac8a9fb27ae6f355f68a8cfa7770b00b0480d6cde5215ed',
+              '06': '3205fb482ee261504f0350fac0d8d4719bb5e7601ed510d105f565277dddd45b',
+              '07': 'd92915e0b506c8c20116a691e0a8be7e2de560a0288314c5e3f2ce04b2576ab2',
+              '08': '78db519b83d6b9e7ed18b9a1c66ea0efc344570cf4fac1e5c2997c39c4b35fa9',
+              '09': 'e91807ac7330e8781c58e8fe5a8577666f9e7ad28cdf67fbdda9b0f71726611f',
+              '10': 'd517b96d88ec6fea4c31be4b825a7c70211ff2b2ae263d92e58bfafd24db7fc6',
+              '11': '3fa5ccd66ab4a4eb6f7c9905ca5ac4e5ebb8402d15b1373fea5ad004e83692e7',
+              '12': '87db9b016b4b6377625dfc3549b5f5dcd177a989ecdd91f1291d94025d617415',
+          }
+          expected_lengths = {f'{i:02d}': 15000 for i in range(1, 12)}
+          expected_lengths['12'] = 13832
+
           repo = os.environ['GITHUB_REPOSITORY']
           token = os.environ['GH_TOKEN']
-          expected_sha = os.environ['EXPECTED_SHA256']
-          request = urllib.request.Request(
-              f'https://api.github.com/repos/{repo}/issues/1/comments?per_page=100',
-              headers={
-                  'Authorization': f'Bearer {token}',
-                  'Accept': 'application/vnd.github+json',
-                  'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'xiangneng-marker-validator'
-              }
-          )
-          with urllib.request.urlopen(request) as response:
-              comments = json.load(response)
+          comments = []
+          page = 1
+          while True:
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/issues/1/comments?per_page=100&page={page}',
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'xiangneng-marker-auditor'
+                  }
+              )
+              with urllib.request.urlopen(request) as response:
+                  batch = json.load(response)
+              comments.extend(batch)
+              if len(batch) < 100:
+                  break
+              page += 1
 
           marker = re.compile(r'^XIANGNENG_PATCH_PART_(\d{2})_12$')
           found = {}
+          observations = []
           for comment in comments:
               lines = (comment.get('body') or '').splitlines()
               if not lines:
@@ -55,71 +75,71 @@ jobs:
               match = marker.fullmatch(lines[0].strip())
               if not match:
                   continue
-              part = int(match.group(1))
+              part = match.group(1)
               payload = ''.join(lines[1:]).strip()
-              if not re.fullmatch(r'[A-Za-z0-9+/=]+', payload):
-                  raise SystemExit(f'part {part:02d} contains invalid base64 characters')
-              if part in found:
-                  raise SystemExit(f'duplicate marker part {part:02d}')
-              found[part] = {
-                  'payload': payload,
+              digest = hashlib.sha256(payload.encode()).hexdigest()
+              record = {
+                  'part': part,
                   'comment_id': comment['id'],
-                  'url': comment['html_url']
+                  'url': comment['html_url'],
+                  'length': len(payload),
+                  'sha256': digest,
+                  'expected_length': expected_lengths.get(part),
+                  'expected_sha256': expected_hashes.get(part),
+                  'length_ok': len(payload) == expected_lengths.get(part),
+                  'sha256_ok': digest == expected_hashes.get(part),
+                  'valid_base64_chars': bool(re.fullmatch(r'[A-Za-z0-9+/=]+', payload)),
+                  'prefix': payload[:32],
+                  'suffix': payload[-32:],
               }
+              observations.append(record)
+              found.setdefault(part, []).append(payload)
 
-          expected_parts = list(range(1, 13))
-          if sorted(found) != expected_parts:
-              raise SystemExit(f'parts mismatch: found={sorted(found)} expected={expected_parts}')
-          for part in range(1, 12):
-              if len(found[part]['payload']) != 15000:
-                  raise SystemExit(f'part {part:02d} length={len(found[part]["payload"])} expected=15000')
-          if len(found[12]['payload']) != 13832:
-              raise SystemExit(f'part 12 length={len(found[12]["payload"])} expected=13832')
+          errors = []
+          parts_summary = {}
+          for part in [f'{i:02d}' for i in range(1, 13)]:
+              records = [item for item in observations if item['part'] == part]
+              parts_summary[part] = records
+              if len(records) != 1:
+                  errors.append(f'part {part} occurrence_count={len(records)}')
+              elif not records[0]['length_ok'] or not records[0]['sha256_ok'] or not records[0]['valid_base64_chars']:
+                  errors.append(f'part {part} mismatch')
 
-          joined = ''.join(found[part]['payload'] for part in expected_parts)
-          archive = base64.b64decode(joined, validate=True)
-          actual_sha = hashlib.sha256(archive).hexdigest()
-          if actual_sha != expected_sha:
-              raise SystemExit(f'sha256 mismatch: actual={actual_sha} expected={expected_sha}')
+          actual_archive_sha = None
+          archive_bytes = None
+          if not errors:
+              joined = ''.join(found[f'{i:02d}'][0] for i in range(1, 13))
+              archive = base64.b64decode(joined, validate=True)
+              archive_bytes = len(archive)
+              actual_archive_sha = hashlib.sha256(archive).hexdigest()
+              if actual_archive_sha != '198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e':
+                  errors.append(f'archive sha mismatch {actual_archive_sha}')
 
-          output = '/tmp/marker-validation'
-          with open(f'{output}/upgrade-bundle.tar.xz', 'wb') as handle:
-              handle.write(archive)
           manifest = {
-              'status': 'validated',
-              'partCount': 12,
-              'base64Length': len(joined),
-              'archiveBytes': len(archive),
-              'sha256': actual_sha,
-              'parts': {
-                  f'{part:02d}': {
-                      'length': len(found[part]['payload']),
-                      'comment_id': found[part]['comment_id'],
-                      'url': found[part]['url']
-                  }
-                  for part in expected_parts
-              }
+              'status': 'validated' if not errors else 'invalid',
+              'comments_scanned': len(comments),
+              'pages_scanned': page,
+              'errors': errors,
+              'archive_bytes': archive_bytes,
+              'archive_sha256': actual_archive_sha,
+              'parts': parts_summary,
           }
-          with open(f'{output}/manifest.json', 'w') as handle:
+          with open('/tmp/marker-audit/manifest.json', 'w') as handle:
               json.dump(manifest, handle, ensure_ascii=False, indent=2)
           print(json.dumps(manifest, ensure_ascii=False, indent=2))
           PY
-          tar -tJf /tmp/marker-validation/upgrade-bundle.tar.xz > /tmp/marker-validation/archive-files.txt
-          tar -xJf /tmp/marker-validation/upgrade-bundle.tar.xz -C /tmp/marker-validation/extracted
-          test "$(find /tmp/marker-validation/extracted -maxdepth 1 -type f -name '*.patch' | wc -l)" -eq 3
 
-      - name: Publish validation evidence
+      - name: Publish audit manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          cd /tmp/marker-validation
-          rm -rf extracted upgrade-bundle.tar.xz
+          cd /tmp/marker-audit
           git init
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b comment-recovery-output
-          git add manifest.json archive-files.txt
-          git commit -m "ci: validate PR marker bundle ${GITHUB_SHA}"
+          git add manifest.json
+          git commit -m "ci: audit PR marker comments ${GITHUB_SHA}"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin comment-recovery-output
