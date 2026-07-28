@@ -17,7 +17,7 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Diagnose first patch against public demo branch
+      - name: Diagnose normalized first patch against public demo branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
@@ -73,8 +73,10 @@ jobs:
           PY
           tar -xJf /tmp/upgrade.tar.xz -C /tmp/patches
           patch_file=$(find /tmp/patches -maxdepth 1 -type f -name '*小程序报销与岗位职级权限优化-20260727.patch' -print -quit)
+          normalized_patch=/tmp/patch-diagnostic/reimbursement-normalized.patch
+          sed 's/\r$//' "$patch_file" > "$normalized_patch"
           set +e
-          git apply --check --verbose "$patch_file" > /tmp/patch-diagnostic/result.txt 2>&1
+          git apply --check --verbose "$normalized_patch" > /tmp/patch-diagnostic/result.txt 2>&1
           status=$?
           set -e
           {
@@ -82,6 +84,7 @@ jobs:
             echo "branch=agent/public-demo-20260727"
             echo "commit=$(git rev-parse HEAD)"
             echo "patch=$(basename "$patch_file")"
+            echo "normalization=strip-CR-at-EOL"
             echo "----- git apply output -----"
             cat /tmp/patch-diagnostic/result.txt
           } > /tmp/patch-diagnostic/final.txt
@@ -94,12 +97,12 @@ jobs:
           set -euo pipefail
           cd /tmp/patch-diagnostic
           cp final.txt PATCH_CONFLICT.txt
-          rm -f result.txt final.txt
+          rm -f result.txt final.txt reimbursement-normalized.patch
           git init
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b comment-recovery-output
           git add PATCH_CONFLICT.txt
-          git commit -m "ci: diagnose reimbursement patch conflict ${GITHUB_SHA}"
+          git commit -m "ci: diagnose normalized reimbursement patch ${GITHUB_SHA}"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin comment-recovery-output
