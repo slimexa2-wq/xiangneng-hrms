@@ -163,6 +163,21 @@ jobs:
           node scripts/generate-project-index.mjs
           node scripts/check-architecture.mjs
 
+      - name: Publish verified AI-navigable source snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: materialize verified source ${SOURCE_SHA}"
+          verified_sha=$(git rev-parse HEAD)
+          echo "VERIFIED_SOURCE_SHA=${verified_sha}" >> "$GITHUB_ENV"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin HEAD:refs/heads/verified-source
+          echo "Published verified-source at ${verified_sha}"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -189,7 +204,8 @@ jobs:
           cp apps/sites-demo/dist/client/index.html apps/sites-demo/dist/client/404.html
           cat > apps/sites-demo/dist/client/deployment-info.json <<JSON
           {
-            "sourceCommit": "${SOURCE_SHA}",
+            "sourceCommit": "${VERIFIED_SOURCE_SHA}",
+            "sourceWorkflowCommit": "${SOURCE_SHA}",
             "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "dataMode": "synthetic-offline-demo"
           }
@@ -205,7 +221,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b public-demo
           git add -A
-          git commit -m "deploy: public demo ${SOURCE_SHA}"
+          git commit -m "deploy: public demo ${VERIFIED_SOURCE_SHA}"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin public-demo
 
