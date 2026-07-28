@@ -1,6 +1,9 @@
 name: Build public demo
 
 on:
+  push:
+    branches:
+      - agent/public-demo-20260727
   pull_request:
     branches:
       - main
