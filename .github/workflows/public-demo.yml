@@ -29,7 +29,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Reconstruct and apply verified upgrade bundle
+      - name: Reconstruct verified upgrade bundle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
@@ -37,7 +37,6 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/xiangneng-upgrade-patches /tmp/xiangneng-upgrade-bundle.tar.xz
           mkdir -p /tmp/xiangneng-upgrade-patches
-
           python - <<'PY'
           import base64, hashlib, json, os, re, urllib.request
 
@@ -80,18 +79,22 @@ jobs:
           if len(parts[12]) != 13832:
               raise SystemExit(f'part 12 length={len(parts[12])} expected=13832')
 
-          archive = base64.b64decode(''.join(parts[part] for part in expected), validate=True)
+          joined = ''.join(parts[part] for part in expected)
+          archive = base64.b64decode(joined, validate=True)
           actual_sha = hashlib.sha256(archive).hexdigest()
           if actual_sha != os.environ['EXPECTED_SHA256']:
               raise SystemExit(f'sha256 mismatch: actual={actual_sha}')
           with open('/tmp/xiangneng-upgrade-bundle.tar.xz', 'wb') as handle:
               handle.write(archive)
-          print(f'Validated marker bundle: {len(archive)} bytes, sha256={actual_sha}')
+          print(f'Validated marker bundle: parts=12 base64={len(joined)} bytes={len(archive)} sha256={actual_sha}')
           PY
-
           tar -tJf /tmp/xiangneng-upgrade-bundle.tar.xz
           tar -xJf /tmp/xiangneng-upgrade-bundle.tar.xz -C /tmp/xiangneng-upgrade-patches
+          test "$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*.patch' | wc -l)" -eq 3
 
+      - name: Apply verified upgrade patches
+        run: |
+          set -euo pipefail
           apply_patch() {
             pattern="$1"
             patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name "$pattern" -print -quit)
@@ -100,11 +103,13 @@ jobs:
             git apply --check "$patch_file"
             git apply --whitespace=nowarn "$patch_file"
           }
-
           apply_patch "*小程序报销与岗位职级权限优化-20260727.patch"
           apply_patch "*内部组织按业务部门修正版-20260727.patch"
           apply_patch "*AI模块化维护基础优化-20260727.patch"
 
+      - name: Normalize and verify upgraded source
+        run: |
+          set -euo pipefail
           while IFS= read -r -d '' file; do
             case "$file" in
               *.ts|*.tsx|*.js|*.mjs|*.cjs|*.json|*.md|*.prisma|*.sql|*.yml|*.yaml|*.css|*.scss|*.sass|*.less|*.html|*.txt)
@@ -112,7 +117,6 @@ jobs:
                 ;;
             esac
           done < <(git diff --name-only --diff-filter=ACM -z)
-
           git diff --check
           node scripts/generate-project-index.mjs
           node scripts/check-architecture.mjs
@@ -179,6 +183,5 @@ jobs:
             echo "Public demo URL did not become healthy: ${url}" >&2
             return 1
           }
-
           verify_url "https://raw.githack.com/slimexa2-wq/xiangneng-hrms/public-demo/index.html"
           verify_url "https://raw.githack.com/slimexa2-wq/xiangneng-hrms/public-demo/portal/index.html"
