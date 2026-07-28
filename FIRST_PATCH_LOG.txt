@@ -1,0 +1,1685 @@
+HEAD=54188e0e0389601361c41b68e8a7ea6621452830
+PATCH=祥能HRMS-小程序报销与岗位职级权限优化-20260727.patch
+PATCH_SHA256=9d454d79ecc4ec01f05ccc0e757935830e9176253ece1fe7dca7895e5be0457b
+=== PATCH FILES ===
+diff --git a/apps/admin/src/lib/demo-reimbursement.test.ts b/apps/admin/src/lib/demo-reimbursement.test.ts
+diff --git a/apps/admin/src/lib/demo.ts b/apps/admin/src/lib/demo.ts
+diff --git a/apps/admin/src/pages/InternalEmployeesPage.tsx b/apps/admin/src/pages/InternalEmployeesPage.tsx
+diff --git a/apps/admin/src/pages/ReimbursementsPage.test.tsx b/apps/admin/src/pages/ReimbursementsPage.test.tsx
+diff --git a/apps/admin/src/pages/ReimbursementsPage.tsx b/apps/admin/src/pages/ReimbursementsPage.tsx
+diff --git a/apps/admin/src/types/domain.ts b/apps/admin/src/types/domain.ts
+diff --git a/apps/api/src/authorization.ts b/apps/api/src/authorization.ts
+diff --git a/apps/api/src/data-scope.ts b/apps/api/src/data-scope.ts
+diff --git a/apps/api/src/routes/internal-employees.ts b/apps/api/src/routes/internal-employees.ts
+diff --git a/apps/api/src/routes/leadership.ts b/apps/api/src/routes/leadership.ts
+diff --git a/apps/api/src/routes/reimbursements.ts b/apps/api/src/routes/reimbursements.ts
+diff --git a/apps/api/src/services/internal-employees.ts b/apps/api/src/services/internal-employees.ts
+diff --git a/apps/api/src/services/position-authorizations.ts b/apps/api/src/services/position-authorizations.ts
+diff --git a/apps/api/src/services/reimbursement-artifacts.ts b/apps/api/src/services/reimbursement-artifacts.ts
+diff --git a/apps/api/src/services/reimbursements.ts b/apps/api/src/services/reimbursements.ts
+diff --git a/apps/api/src/session-user.ts b/apps/api/src/session-user.ts
+diff --git a/apps/api/test/authorization.test.ts b/apps/api/test/authorization.test.ts
+diff --git a/apps/api/test/data-scope-bindings.test.ts b/apps/api/test/data-scope-bindings.test.ts
+diff --git a/apps/api/test/internal-employee-domain.test.ts b/apps/api/test/internal-employee-domain.test.ts
+diff --git a/apps/api/test/internal-employee-routes.test.ts b/apps/api/test/internal-employee-routes.test.ts
+diff --git a/apps/api/test/position-authorizations.test.ts b/apps/api/test/position-authorizations.test.ts
+diff --git a/apps/api/test/reimbursement-domain.test.ts b/apps/api/test/reimbursement-domain.test.ts
+diff --git a/apps/api/test/reimbursement-routes.test.ts b/apps/api/test/reimbursement-routes.test.ts
+diff --git a/apps/api/test/reimbursements.test.ts b/apps/api/test/reimbursements.test.ts
+diff --git a/apps/api/test/session-user.test.ts b/apps/api/test/session-user.test.ts
+diff --git a/apps/miniapp/src/api/client.ts b/apps/miniapp/src/api/client.ts
+diff --git a/apps/miniapp/src/api/services.ts b/apps/miniapp/src/api/services.ts
+diff --git a/apps/miniapp/src/api/types.ts b/apps/miniapp/src/api/types.ts
+diff --git a/apps/miniapp/src/app.config.ts b/apps/miniapp/src/app.config.ts
+diff --git a/apps/miniapp/src/app.scss b/apps/miniapp/src/app.scss
+diff --git a/apps/miniapp/src/auth/session.ts b/apps/miniapp/src/auth/session.ts
+diff --git a/apps/miniapp/src/components/form.tsx b/apps/miniapp/src/components/form.tsx
+diff --git a/apps/miniapp/src/components/ui.tsx b/apps/miniapp/src/components/ui.tsx
+diff --git a/apps/miniapp/src/domain/reimbursements.test.ts b/apps/miniapp/src/domain/reimbursements.test.ts
+diff --git a/apps/miniapp/src/domain/reimbursements.ts b/apps/miniapp/src/domain/reimbursements.ts
+diff --git a/apps/miniapp/src/domain/roles.test.ts b/apps/miniapp/src/domain/roles.test.ts
+diff --git a/apps/miniapp/src/domain/roles.ts b/apps/miniapp/src/domain/roles.ts
+diff --git a/apps/miniapp/src/pages/application/form/index.tsx b/apps/miniapp/src/pages/application/form/index.tsx
+diff --git a/apps/miniapp/src/pages/index/index.tsx b/apps/miniapp/src/pages/index/index.tsx
+diff --git a/apps/miniapp/src/pages/jobs/detail/index.tsx b/apps/miniapp/src/pages/jobs/detail/index.tsx
+diff --git a/apps/miniapp/src/pages/jobs/index/index.tsx b/apps/miniapp/src/pages/jobs/index/index.tsx
+diff --git a/apps/miniapp/src/pages/referrals/index/index.tsx b/apps/miniapp/src/pages/referrals/index/index.tsx
+diff --git a/apps/miniapp/src/pages/referrals/mine/index.tsx b/apps/miniapp/src/pages/referrals/mine/index.tsx
+diff --git a/apps/miniapp/src/pages/referrals/rewards/index.tsx b/apps/miniapp/src/pages/referrals/rewards/index.tsx
+diff --git a/apps/miniapp/src/pages/reimbursements/detail/index.config.ts b/apps/miniapp/src/pages/reimbursements/detail/index.config.ts
+diff --git a/apps/miniapp/src/pages/reimbursements/detail/index.tsx b/apps/miniapp/src/pages/reimbursements/detail/index.tsx
+diff --git a/apps/miniapp/src/pages/reimbursements/form/index.config.ts b/apps/miniapp/src/pages/reimbursements/form/index.config.ts
+diff --git a/apps/miniapp/src/pages/reimbursements/form/index.tsx b/apps/miniapp/src/pages/reimbursements/form/index.tsx
+diff --git a/apps/miniapp/src/pages/reimbursements/index/index.config.ts b/apps/miniapp/src/pages/reimbursements/index/index.config.ts
+diff --git a/apps/miniapp/src/pages/reimbursements/index/index.tsx b/apps/miniapp/src/pages/reimbursements/index/index.tsx
+diff --git a/apps/miniapp/src/pages/salary/index/index.tsx b/apps/miniapp/src/pages/salary/index/index.tsx
+diff --git a/docs/data-model.md b/docs/data-model.md
+diff --git a/docs/permission-matrix.md b/docs/permission-matrix.md
+diff --git a/docs/reimbursement-miniapp-and-position-permissions.md b/docs/reimbursement-miniapp-and-position-permissions.md
+diff --git a/docs/reports/reimbursement-permissions-verification-2026-07-27.md b/docs/reports/reimbursement-permissions-verification-2026-07-27.md
+diff --git a/docs/superpowers/plans/2026-07-27-reimbursement-permissions.md b/docs/superpowers/plans/2026-07-27-reimbursement-permissions.md
+diff --git a/packages/shared/src/api.ts b/packages/shared/src/api.ts
+diff --git a/prisma/migrations/20260727090000_position_role_bindings/migration.sql b/prisma/migrations/20260727090000_position_role_bindings/migration.sql
+diff --git a/prisma/migrations/20260727091000_reimbursement_invoice_cover/migration.sql b/prisma/migrations/20260727091000_reimbursement_invoice_cover/migration.sql
+diff --git a/prisma/migrations/20260727100000_job_grade_reimbursement_policies/migration.sql b/prisma/migrations/20260727100000_job_grade_reimbursement_policies/migration.sql
+diff --git a/prisma/migrations/20260727101000_internal_employee_account_binding/migration.sql b/prisma/migrations/20260727101000_internal_employee_account_binding/migration.sql
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+diff --git a/scripts/import-demo-data.mts b/scripts/import-demo-data.mts
+=== APPLY CHECK ===
+Checking patch apps/admin/src/lib/demo-reimbursement.test.ts...
+error: while searching for:
+  ListResult,?
+  Reimbursement,?
+  ReimbursementArtifact,?
+  ReimbursementStatus?
+} from "../types/domain";?
+import { handleDemoRequest } from "./demo";?
+
+error: patch failed: apps/admin/src/lib/demo-reimbursement.test.ts:5
+error: apps/admin/src/lib/demo-reimbursement.test.ts: patch does not apply
+Checking patch apps/admin/src/lib/demo.ts...
+error: while searching for:
+?
+const now = new Date().toISOString();?
+?
+const demoOrganizationOptions: OrganizationOptionSet = {?
+  legalEntities: [?
+    { id: "demo-legal-1", code: "XN-DEMO-01", name: "祥能演示一分公司有限公司" },?
+
+error: patch failed: apps/admin/src/lib/demo.ts:54
+error: apps/admin/src/lib/demo.ts: patch does not apply
+Checking patch apps/admin/src/pages/InternalEmployeesPage.tsx...
+error: while searching for:
+import { useMemo, useState } from "react";?
+import {?
+  ApartmentOutlined,?
+  PlusOutlined,?
+  SwapOutlined,?
+  UserDeleteOutlined?
+} from "@ant-design/icons";?
+import {?
+
+error: patch failed: apps/admin/src/pages/InternalEmployeesPage.tsx:1
+error: apps/admin/src/pages/InternalEmployeesPage.tsx: patch does not apply
+Checking patch apps/admin/src/pages/ReimbursementsPage.test.tsx...
+error: while searching for:
+?
+const apiGet = vi.fn();?
+const apiPost = vi.fn();?
+?
+vi.mock("../lib/api", () => ({?
+  api: {?
+    get: (...args: unknown[]) => apiGet(...args),?
+    post: (...args: unknown[]) => apiPost(...args),?
+    patch: vi.fn(),?
+    upload: vi.fn(),?
+    download: vi.fn()?
+  },?
+  getErrorMessage: (error: unknown) =>?
+
+error: patch failed: apps/admin/src/pages/ReimbursementsPage.test.tsx:5
+error: apps/admin/src/pages/ReimbursementsPage.test.tsx: patch does not apply
+Checking patch apps/admin/src/pages/ReimbursementsPage.tsx...
+error: while searching for:
+  OrganizationOptionSet,?
+  Reimbursement,?
+  ReimbursementArtifact,?
+  ReimbursementIssue,?
+  ReimbursementLine,?
+  ReimbursementStatus?
+
+error: patch failed: apps/admin/src/pages/ReimbursementsPage.tsx:51
+error: apps/admin/src/pages/ReimbursementsPage.tsx: patch does not apply
+Checking patch apps/admin/src/types/domain.ts...
+error: while searching for:
+  path: string;?
+};?
+?
+export type OrganizationOptionSet = {?
+  legalEntities: Array<{ id: string; code: string; name: string }>;?
+  branches: Branch[];?
+  organizationUnits: OrganizationUnit[];?
+  positions: Array<{ id: string; code: string; name: string; organizationUnitId?: Nullable<string> }>;?
+  jobGrades: Array<{ id: string; code: string; name: string; level: number }>;?
+};?
+?
+export type InternalEmployment = {?
+
+error: patch failed: apps/admin/src/types/domain.ts:64
+error: apps/admin/src/types/domain.ts: patch does not apply
+Checking patch apps/api/src/authorization.ts...
+Checking patch apps/api/src/data-scope.ts...
+error: while searching for:
+      organizationUnit: {?
+        OR: [?
+          { id: { in: organizationUnitIds } },?
+          {?
+            path: {?
+              contains: organizationUnitIds[0] ?? NO_ACCESS_ID?
+            }?
+          }?
+        ]?
+      }?
+    });?
+
+error: patch failed: apps/api/src/data-scope.ts:195
+error: apps/api/src/data-scope.ts: patch does not apply
+Checking patch apps/api/src/routes/internal-employees.ts...
+error: while searching for:
+import type { FastifyInstance } from "fastify";?
+import {?
+  DataScopeType,?
+  Permission,?
+  idSchema,?
+  isWithinDataScope?
+} from "@xiangneng/shared";?
+import { z } from "zod";?
+import {?
+  andWhere,?
+  internalEmployeeWhere,?
+  organizationUnitWhere?
+} from "../data-scope.js";?
+import { AppError, notFound } from "../errors.js";?
+import { paginationMeta, parsePagination, success } from "../http.js";?
+import { getSession } from "../plugins/auth.js";?
+import {?
+  deleteInternalEmployee,?
+  offboardInternalEmployee,?
+  transferInternalEmployee?
+} from "../services/internal-employees.js";?
+import { writeAudit } from "../audit.js";?
+?
+const employeeStatusSchema = z.enum(["ACTIVE", "DISABLED", "LEFT", "ARCHIVED"]);?
+const employeeQuerySchema = z.object({?
+  page: z.coerce.number().optional(),?
+  pageSize: z.coerce.number().optional(),?
+  keyword: z.string().trim().max(120).optional(),?
+  status: employeeStatusSchema.optional(),?
+  branchId: idSchema.optional(),?
+  organizationUnitId: idSchema.optional()?
+});?
+const employeeCreateSchema = z.object({?
+  employeeNo: z.string().trim().min(1).max(64),?
+  name: z.string().trim().min(1).max(64),?
+  phone: z.string().trim().regex(/^1\d{10}$/),?
+  idCard: z.string().trim().min(15).max(32),?
+  email: z.string().trim().email().max(200).optional().nullable(),?
+  userId: idSchema.optional().nullable(),?
+  legalEntityId: idSchema.optional().nullable(),?
+  branchId: idSchema.optional().nullable(),?
+  organizationUnitId: idSchema,?
+  positionId: idSchema,?
+  jobGradeId: idSchema.optional().nullable(),?
+  onboardDate: z.coerce.date(),?
+  reason: z.string().trim().max(500).optional()?
+});?
+const employeePatchSchema = z.object({?
+  name: z.string().trim().min(1).max(64).optional(),?
+  phone: z.string().trim().regex(/^1\d{10}$/).optional(),?
+  idCard: z.string().trim().min(15).max(32).optional(),?
+  email: z.string().trim().email().max(200).optional().nullable(),?
+  expectedVersion: z.number().int().positive()?
+}).strict();?
+const transferSchema = z.object({?
+  expectedVersion: z.number().int().positive(),?
+  effectiveDate: z.coerce.date(),?
+  organizationUnitId: idSchema,?
+  positionId: idSchema,?
+  branchId: idSchema.optional().nullable(),?
+  reason: z.string().trim().min(1).max(500)?
+});?
+const offboardSchema = z.object({?
+  expectedVersion: z.number().int().positive(),?
+  offboardDate: z.coerce.date(),?
+  reason: z.string().trim().min(1).max(500)?
+});?
+?
+const employeeInclude = {?
+  legalEntity: { select: { id: true, code: true, name: true } },?
+  branch: { select: { id: true, name: true } },?
+  organizationUnit: { select: { id: true, code: true, name: true, type: true } },?
+  position: { select: { id: true, code: true, name: true } },?
+  jobGrade: { select: { id: true, code: true, name: true, level: true } },?
+  employments: {?
+    include: {?
+      legalEntity: { select: { id: true, name: true } },?
+      branch: { select: { id: true, name: true } },?
+      organizationUnit: { select: { id: true, name: true } },?
+      position: { select: { id: true, name: true } },?
+      jobGrade: { select: { id: true, name: true } }?
+    },?
+    orderBy: { startedAt: "desc" as const }?
+  },?
+  changes: {?
+    orderBy: [{ effectiveAt: "desc" as const }, { createdAt: "desc" as const }],?
+    take: 100?
+  }?
+};?
+?
+export async function internalEmployeeRoutes(app: FastifyInstance): Promise<void> {?
+  app.get("/organization/tree", {?
+    preHandler: [app.authenticate, app.requirePermission(Permission.ORG_READ)]?
+  }, async (request) => {?
+    const user = getSession(request);?
+    const items = await app.prisma.organizationUnit.findMany({?
+      where: andWhere(organizationUnitWhere(user), { isActive: true }),?
+      include: {?
+        legalEntity: { select: { id: true, code: true, name: true } },?
+        branch: { select: { id: true, name: true } }?
+      },?
+      orderBy: [{ path: "asc" }, { sortOrder: "asc" }]?
+    });?
+    return success(request, items);?
+  });?
+?
+  app.get("/organization/options", {?
+    preHandler: [app.authenticate, app.requirePermission(Permission.OR
+error: patch failed: apps/api/src/routes/internal-employees.ts:1
+error: apps/api/src/routes/internal-employees.ts: patch does not apply
+Checking patch apps/api/src/routes/leadership.ts...
+error: while searching for:
+        "当前在职：截至更新时间，人员状态为在职的外包人员与内部员工合计。",?
+        "本月入离职：按人员主档入职日期、离职日期落在本自然月统计。",?
+        "招聘完成率：招聘中岗位的报名人数 ÷ 需求人数，最高显示100%。",?
+        "报销金额：以报销明细付款金额和发票金额按分汇总；发票金额严格大于付款金额。"?
+      ]?
+    });?
+  });?
+
+error: patch failed: apps/api/src/routes/leadership.ts:167
+error: apps/api/src/routes/leadership.ts: patch does not apply
+Checking patch apps/api/src/routes/reimbursements.ts...
+error: while searching for:
+import { randomUUID } from "node:crypto";?
+import { Readable } from "node:stream";?
+import { buffer as streamToBuffer } from "node:stream/consumers";?
+import type { FastifyInstance, FastifyRequest } from "fastify";?
+import {?
+  DataScopeType,?
+  Permission,?
+  idSchema,?
+  isWithinDataScope,?
+  type Permission as PermissionValue,?
+  type SessionUser?
+} from "@xiangneng/shared";?
+import { z } from "zod";?
+import { writeAudit } from "../audit.js";?
+import {?
+  andWhere,?
+  reimbursementWhere?
+} from "../data-scope.js";?
+import { AppError, notFound } from "../errors.js";?
+import { paginationMeta, parsePagination, success } from "../http.js";?
+import { getSession } from "../plugins/auth.js";?
+import {?
+  ReimbursementStatus,?
+  buildReimbursementArtifactPlan,?
+  summarizeReimbursement,?
+  transitionReimbursement,?
+  validateReimbursementLine,?
+  type ReimbursementStatus as ReimbursementStatusValue,?
+  type TransitionPermission?
+} from "../services/reimbursements.js";?
+import {?
+  createReimbursementWorkbook,?
+  createStoredZip?
+} from "../services/reimbursement-artifacts.js";?
+?
+const reimbursementStatuses = [?
+  "PENDING_SUBMISSION",?
+  "DEPARTMENT_PREPARING",?
+  "OWNER_REVIEWING",?
+  "FINANCE_REVIEWING",?
+  "APPROVED",?
+  "PENDING_PAYMENT",?
+  "PAID"?
+] as const;?
+const statusSchema = z.enum(reimbursementStatuses);?
+const querySchema = z.object({?
+  page: z.coerce.number().optional(),?
+  pageSize: z.coerce.number().optional(),?
+  keyword: z.string().trim().max(120).optional(),?
+  status: statusSchema.optional(),?
+  branchId: idSchema.optional(),?
+  organizationUnitId: idSchema.optional(),?
+  projectId: idSchema.optional(),?
+  supplierId: idSchema.optional()?
+});?
+const lineSchema = z.object({?
+  sequence: z.number().int().positive(),?
+  expenseDate: z.coerce.date(),?
+  category: z.string().trim().min(1).max(80),?
+  description: z.string().trim().min(1).max(500),?
+  payeeName: z.string().trim().max(120).optional().nullable(),?
+  payeeAccount: z.string().trim().max(120).optional().nullable(),?
+  payeeBank: z.string().trim().max(200).optional().nullable(),?
+  paymentCents: z.number().int().positive(),?
+  invoiceCents: z.number().int().positive()?
+});?
+const createSchema = z.object({?
+  title: z.string().trim().min(1).max(200),?
+  branchId: idSchema.optional().nullable(),?
+  organizationUnitId: idSchema.optional().nullable(),?
+  projectId: idSchema.optional().nullable(),?
+  supplierId: idSchema.optional().nullable(),?
+  lines: z.array(lineSchema).min(1).max(200)?
+});?
+const patchSchema = z.object({?
+  expectedVersion: z.number().int().positive(),?
+  title: z.string().trim().min(1).max(200).optional(),?
+  lines: z.array(lineSchema).min(1).max(200).optional()?
+}).refine((value) => value.title !== undefined || value.lines !== undefined, {?
+  message: "至少修改一个字段"?
+});?
+const transitionSchema = z.object({?
+  expectedVersion: z.number().int().positive(),?
+  targetStatus: statusSchema,?
+  comment: z.string().trim().max(500).optional()?
+});?
+const issueSchema = z.object({?
+  lineId: idSchema.optional().nullable(),?
+  type: z.string().trim().min(1).max(80),?
+  description: z.string().trim().min(1).max(500)?
+});?
+const resolveIssueSchema = z.object({?
+  resolution: z.string().trim().min(1).max(500)?
+});?
+const paymentSchema = z.object({?
+  expectedVersion: z.number().int().positive(),?
+  amountCents: z.number().int().positive(),?
+  reference: z.string().trim().min(1).max(120),?
+  paidAt: z.coerce.date(),?
+  proofAttachmentId: idSchema.optional().nullable()?
+});?
+const attachmentQuerySchema = z.object({?
+  type: z.enum(["PAYMENT_VOUCHER", "INVOICE", "SUPPORTING"]),?
+  lineId: idSchema.optional()?
+});?
+const artifactSchema = z.object({?
+  type: z.enum([?
+    "REIMBURSEMENT_FORM",?
+    "PAYMENT_PACKAGE",?
+    "INVOICE_PACKAGE"?
+  ])?
+});?
+?
+const listInclude = {?
+  applicant: { select: { id: true, displayName: true } },?
+  branch: { select: { id: true, name: true } },?
+  organizationUnit: { select: { id: true, name: true } },?
+  project: { select: { id: true, name: true } },?
+  supplier: { select
+error: patch failed: apps/api/src/routes/reimbursements.ts:1
+error: apps/api/src/routes/reimbursements.ts: patch does not apply
+Checking patch apps/api/src/services/internal-employees.ts...
+error: while searching for:
+import type { PrismaClient } from "../generated/prisma/client.js";?
+import { AppError, notFound } from "../errors.js";?
+?
+type AsyncDelegate = {?
+  findUnique(args: Record<string, unknown>): Promise<Record<string, unknown> | null>;?
+  create(args: Record<string, unknown>): Promise<Record<string, unknown>>;?
+  update(args: Record<string, unknown>): Promise<Record<string, unknown>>;?
+  updateMany(args: Record<string, unknown>): Promise<{ count: number }>;?
+  delete(args: Record<string, unknown>): Promise<Record<string, unknown>>;?
+};?
+?
+type InternalEmployeeTx = {?
+  internalEmployee: AsyncDelegate;?
+  internalEmployment: AsyncDelegate;?
+  internalEmployeeChange: AsyncDelegate;?
+  userRoleAssignment: AsyncDelegate;?
+  dataScopeBinding: AsyncDelegate;?
+  user: AsyncDelegate;?
+};?
+?
+type InternalEmployeeDb = InternalEmployeeTx & {?
+  $transaction?<T>(?
+    callback: (tx: InternalEmployeeTx) => Promise<T>?
+  ): Promise<T>;?
+};?
+?
+export type InternalEmployeeTransferInput = {?
+  employeeId: string;?
+  actorId: string;?
+  expectedVersion: number;?
+  effectiveDate: Date;?
+  organizationUnitId: string;?
+  positionId: string;?
+  branchId?: string | null;?
+  reason: string;?
+};?
+?
+export type InternalEmployeeOffboardInput = {?
+  employeeId: string;?
+  actorId: string;?
+  expectedVersion: number;?
+  offboardDate: Date;?
+  reason: string;?
+};?
+?
+export type InternalEmployeeDeleteInput = {?
+  employeeId: string;?
+  actorId: string;?
+};?
+?
+function domainDb(db: PrismaClient): InternalEmployeeDb {?
+  return db as unknown as InternalEmployeeDb;?
+}?
+?
+async function inTransaction<T>(?
+  db: PrismaClient,?
+  callback: (tx: InternalEmployeeTx) => Promise<T>?
+): Promise<T> {?
+  const adapted = domainDb(db);?
+  return adapted.$transaction ? adapted.$transaction(callback) : callback(adapted);?
+}?
+?
+function assertCurrentVersion(?
+  employee: Record<string, unknown>,?
+  expectedVersion: number?
+): void {?
+  if (employee.version !== expectedVersion) {?
+    throw new AppError(?
+      409,?
+      "STALE_EMPLOYEE_VERSION",?
+      "员工档案已被其他操作更新，请刷新后重试",?
+      { expectedVersion, currentVersion: employee.version }?
+    );?
+  }?
+}?
+?
+export async function transferInternalEmployee(?
+  db: PrismaClient,?
+  input: InternalEmployeeTransferInput?
+): Promise<Record<string, unknown>> {?
+  return inTransaction(db, async (tx) => {?
+    const employee = await tx.internalEmployee.findUnique({?
+      where: { id: input.employeeId }?
+    });?
+    if (!employee) notFound("内部员工");?
+    if (employee.status !== "ACTIVE") {?
+      throw new AppError(409, "EMPLOYEE_NOT_ACTIVE", "仅在职内部员工可以办理调动");?
+    }?
+    assertCurrentVersion(employee, input.expectedVersion);?
+?
+    const before = {?
+      organizationUnitId: employee.organizationUnitId ?? null,?
+      positionId: employee.positionId ?? null,?
+      branchId: employee.branchId ?? null,?
+      version: employee.version?
+    };?
+?
+    await tx.internalEmployment.updateMany({?
+      where: { employeeId: input.employeeId, endedAt: null },?
+      data: { endedAt: input.effectiveDate, isPrimary: false }?
+    });?
+    await tx.dataScopeBinding.updateMany({?
+      where: {?
+        user: { internalEmployee: { id: input.employeeId } },?
+        isActive: true?
+      },?
+      data: {?
+        isActive: false,?
+        revokedAt: input.effectiveDate,?
+        revokedById: input.actorId?
+      }?
+    });?
+    if (typeof employee.userId === "string") {?
+      await tx.dataScopeBinding.create({?
+        data: {?
+          userId: employee.userId,?
+          type: input.branchId ? "BRANCH" : "ORG_UNIT",?
+          branchId: input.branchId ?? null,?
+          organizationUnitId: input.branchId ? null : input.organizationUnitId,?
+          validFrom: input.effectiveDate,?
+          createdById: input.actorId?
+        }?
+      });?
+      await tx.user.updateMany({?
+        where: { id: employee.userId, isActive: true },?
+        data: {?
+          branchId: input.branchId ?? null,?
+          tokenVersion: { increment: 1 }?
+        }?
+ 
+error: patch failed: apps/api/src/services/internal-employees.ts:1
+error: apps/api/src/services/internal-employees.ts: patch does not apply
+Checking patch apps/api/src/services/position-authorizations.ts...
+Checking patch apps/api/src/services/reimbursement-artifacts.ts...
+error: while searching for:
+      input.totalInvoiceCents / 100,?
+      input.invoiceExcessCents / 100?
+    ],?
+    ["口径说明", "发票金额必须严格大于付款金额；金额统一以人民币元展示、数据库以分存储。"]?
+  ];?
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);?
+  worksheet["!cols"] = [?
+
+error: patch failed: apps/api/src/services/reimbursement-artifacts.ts:55
+error: apps/api/src/services/reimbursement-artifacts.ts: patch does not apply
+Checking patch apps/api/src/services/reimbursements.ts...
+error: while searching for:
+import { AppError, notFound } from "../errors.js";?
+?
+export const ReimbursementStatus = {?
+  PENDING_SUBMISSION: "PENDING_SUBMISSION",?
+  DEPARTMENT_PREPARING: "DEPARTMENT_PREPARING",?
+  OWNER_REVIEWING: "OWNER_REVIEWING",?
+  FINANCE_REVIEWING: "FINANCE_REVIEWING",?
+  APPROVED: "APPROVED",?
+  PENDING_PAYMENT: "PENDING_PAYMENT",?
+  PAID: "PAID"?
+} as const;?
+export type ReimbursementStatus =?
+  (typeof ReimbursementStatus)[keyof typeof ReimbursementStatus];?
+?
+export type ReimbursementLineInput = {?
+  sequence: number;?
+  description: string;?
+  paymentCents: number;?
+  invoiceCents: number;?
+};?
+?
+export type ReimbursementSummary = {?
+  lineCount: number;?
+  totalPaymentCents: number;?
+  totalInvoiceCents: number;?
+  invoiceExcessCents: number;?
+};?
+?
+export function validateReimbursementLine(line: ReimbursementLineInput): void {?
+  if (!Number.isInteger(line.sequence) || line.sequence < 1) {?
+    throw new AppError(400, "INVALID_REIMBURSEMENT_SEQUENCE", "明细序号必须为正整数");?
+  }?
+  if (!line.description.trim()) {?
+    throw new AppError(400, "REIMBURSEMENT_DESCRIPTION_REQUIRED", "报销说明不能为空");?
+  }?
+  if (!Number.isSafeInteger(line.paymentCents) || line.paymentCents <= 0) {?
+    throw new AppError(400, "INVALID_PAYMENT_AMOUNT", "付款金额必须为正整数分");?
+  }?
+  if (!Number.isSafeInteger(line.invoiceCents) || line.invoiceCents <= 0) {?
+    throw new AppError(400, "INVALID_INVOICE_AMOUNT", "发票金额必须为正整数分");?
+  }?
+  if (line.invoiceCents <= line.paymentCents) {?
+    throw new AppError(?
+      400,?
+      "INVOICE_MUST_EXCEED_PAYMENT",?
+      "发票金额必须严格大于付款金额"?
+    );?
+  }?
+}?
+?
+export function summarizeReimbursement(?
+  lines: readonly ReimbursementLineInput[]?
+): ReimbursementSummary {?
+  lines.forEach(validateReimbursementLine);?
+  const totalPaymentCents = lines.reduce(?
+    (sum, line) => sum + line.paymentCents,?
+    0?
+  );?
+  const totalInvoiceCents = lines.reduce(?
+    (sum, line) => sum + line.invoiceCents,?
+    0?
+  );?
+  return {?
+    lineCount: lines.length,?
+    totalPaymentCents,?
+    totalInvoiceCents,?
+    invoiceExcessCents: totalInvoiceCents - totalPaymentCents?
+  };?
+}?
+?
+export type TransitionPermission =?
+  | "reimbursement:self"?
+  | "reimbursement:manage"?
+  | "reimbursement:approve"?
+  | "reimbursement:finance-review"?
+  | "reimbursement:pay";?
+?
+type TransitionCommand = {?
+  batchId: string;?
+  actorId: string;?
+  expectedVersion: number;?
+  targetStatus: ReimbursementStatus;?
+  permission: TransitionPermission;?
+  comment?: string;?
+};?
+?
+type ReimbursementDelegate = {?
+  findUnique(args: Record<string, unknown>): Promise<Record<string, unknown> | null>;?
+  update(args: Record<string, unknown>): Promise<Record<string, unknown>>;?
+};?
+?
+type ApprovalDelegate = {?
+  create(args: Record<string, unknown>): Promise<Record<string, unknown>>;?
+};?
+?
+export type ReimbursementTransitionDb = {?
+  reimbursementBatch: ReimbursementDelegate;?
+  reimbursementApproval: ApprovalDelegate;?
+};?
+?
+const transitionRules: Record<?
+  ReimbursementStatus,?
+  { target: ReimbursementStatus; permissions: readonly TransitionPermission[] } | null?
+> = {?
+  [ReimbursementStatus.PENDING_SUBMISSION]: {?
+    target: ReimbursementStatus.DEPARTMENT_PREPARING,?
+    permissions: ["reimbursement:self", "reimbursement:manage"]?
+  },?
+  [ReimbursementStatus.DEPARTMENT_PREPARING]: {?
+    target: ReimbursementStatus.OWNER_REVIEWING,?
+    permissions: ["reimbursement:manage"]?
+  },?
+  [ReimbursementStatus.OWNER_REVIEWING]: {?
+    target: ReimbursementStatus.FINANCE_REVIEWING,?
+    permissions: ["reimbursement:approve"]?
+  },?
+  [ReimbursementStatus.FINANCE_REVIEWING]: {?
+    target: ReimbursementStatus.APPROVED,?
+    permissions: ["reimbursement:finance-review"]?
+  },?
+  [ReimbursementStatus.APPROVED]: {?
+    target: ReimbursementStatus.PENDING_PAYMENT,?
+    permissions: ["reimbursement:finance-review"]?
+  },?
+  [ReimbursementStatus.PENDING_PAYMENT]: {?
+    target: ReimbursementStatus.PAID,?
+    permissions: ["reimbursement
+error: patch failed: apps/api/src/services/reimbursements.ts:1
+error: apps/api/src/services/reimbursements.ts: patch does not apply
+Checking patch apps/api/src/session-user.ts...
+error: while searching for:
+import {?
+  DataScopeType,?
+  UserRole,?
+  permissionsForRoles,?
+  type SessionUser,?
+  type UserRole as UserRoleValue?
+} from "@xiangneng/shared";?
+?
+type SessionScopeRecord = {?
+  type: SessionUser["scopeBindings"][number]["type"];?
+  organizationUnitId: string | null;?
+  branchId: string | null;?
+  projectId: string | null;?
+  supplierId: string | null;?
+  isActive: boolean;?
+  validFrom: Date;?
+  validTo: Date | null;?
+};?
+?
+type SessionRoleAssignmentRecord = {?
+  status: "ACTIVE" | "REVOKED" | "EXPIRED";?
+  validFrom: Date;?
+  validTo: Date | null;?
+  role: { code: string };?
+  scopes: SessionScopeRecord[];?
+};?
+?
+export type SessionUserRecord = {?
+  id: string;?
+  username: string;?
+  displayName: string;?
+  role: SessionUser["role"];?
+  branchId: string | null;?
+  supplierId: string | null;?
+  personId: string | null;?
+  employeeType: string | null;?
+  projectLinks: Array<{ projectId: string }>;?
+  roleAssignments?: SessionRoleAssignmentRecord[];?
+  dataScopeBindings?: SessionScopeRecord[];?
+};?
+?
+const knownRoles = new Set<string>(Object.values(UserRole));?
+?
+function isUserRole(value: string): value is UserRoleValue {?
+  return knownRoles.has(value);?
+}?
+?
+function isCurrent(?
+  value: { validFrom: Date; validTo: Date | null },?
+  now: Date?
+): boolean {?
+  return value.validFrom <= now && (!value.validTo || value.validTo >= now);?
+}?
+?
+function legacyScopeBindings(?
+  user: SessionUserRecord?
+): SessionUser["scopeBindings"] {?
+  if (?
+    user.role === UserRole.SUPER_ADMIN ||?
+    user.role === UserRole.SYSTEM_ADMIN ||?
+    user.role === UserRole.GROUP_LEADER ||?
+    user.role === UserRole.HEADQUARTERS_MANAGER?
+  ) {?
+    return [{?
+      type: DataScopeType.GROUP,?
+      organizationUnitId: null,?
+      branchId: null,?
+      projectId: null,?
+      supplierId: null?
+    }];?
+  }?
+  if (user.branchId) {?
+    return [{?
+      type: DataScopeType.BRANCH,?
+      organizationUnitId: null,?
+      branchId: user.branchId,?
+      projectId: null,?
+      supplierId: null?
+    }];?
+  }?
+  if (user.supplierId) {?
+    return [{?
+      type: DataScopeType.SUPPLIER,?
+      organizationUnitId: null,?
+      branchId: null,?
+      projectId: null,?
+      supplierId: user.supplierId?
+    }];?
+  }?
+  if (user.projectLinks.length) {?
+    return user.projectLinks.map((link) => ({?
+      type: DataScopeType.PROJECT,?
+      organizationUnitId: null,?
+      branchId: null,?
+      projectId: link.projectId,?
+      supplierId: null?
+    }));?
+  }?
+  return [{?
+    type: DataScopeType.SELF,?
+    organizationUnitId: null,?
+    branchId: null,?
+    projectId: null,?
+    supplierId: null?
+  }];?
+}?
+?
+export function toSessionUser(?
+  user: SessionUserRecord,?
+  now = new Date()?
+): SessionUser {?
+  const activeAssignments = (user.roleAssignments ?? []).filter(?
+    (assignment) =>?
+      assignment.status === "ACTIVE" &&?
+      isCurrent(assignment, now) &&?
+      isUserRole(assignment.role.code)?
+  );?
+  const assignedRoles = activeAssignments?
+    .map((assignment) => assignment.role.code)?
+    .filter(isUserRole);?
+  const hasManagedAssignments = Boolean(user.roleAssignments?.length);?
+  const hasManagedDirectScopes = Boolean(user.dataScopeBindings?.length);?
+  const roles = [...new Set(?
+    assignedRoles.length?
+      ? assignedRoles?
+      : hasManagedAssignments?
+        ? []?
+        : [user.role]?
+  )];?
+  const assignedScopes = activeAssignments.flatMap((assignment) =>?
+    assignment.scopes?
+      .filter((scope) => scope.isActive && isCurrent(scope, now))?
+      .map((scope) => ({?
+        type: scope.type,?
+        organizationUnitId: scope.organizationUnitId,?
+        branchId: scope.branchId,?
+        projectId: scope.projectId,?
+        supplierId: scope.supplierId?
+      }))?
+  );?
+  const directScopes = (user.dataScopeBindings ?? [])?
+    .filter((scope) => scope.isActive && isCurrent(scope, now))?
+    .map((scope) => ({?
+      type: scope.type,?
+      organizationUnitId: scope.organizationUnitId,?
+      branchId: scope.branchId,?
+      projectId: scope.projectId,?
+      supplierId: scope.sup
+error: patch failed: apps/api/src/session-user.ts:1
+error: apps/api/src/session-user.ts: patch does not apply
+Checking patch apps/api/test/authorization.test.ts...
+Checking patch apps/api/test/data-scope-bindings.test.ts...
+error: while searching for:
+} from "@xiangneng/shared";?
+import {?
+  applicationWhere,?
+  personWhere,?
+  projectWhere?
+} from "../src/data-scope.js";?
+
+error: patch failed: apps/api/test/data-scope-bindings.test.ts:7
+error: apps/api/test/data-scope-bindings.test.ts: patch does not apply
+Checking patch apps/api/test/internal-employee-domain.test.ts...
+error: while searching for:
+import { describe, expect, it, vi } from "vitest";?
+import type { PrismaClient } from "../src/generated/prisma/client.js";?
+import { AppError } from "../src/errors.js";?
+import {?
+  deleteInternalEmployee,?
+  offboardInternalEmployee,?
+  transferInternalEmployee?
+} from "../src/services/internal-employees.js";?
+?
+function transactionClient(overrides: Record<string, unknown>): PrismaClient {?
+  const client = {?
+    $transaction: async (callback: (tx: unknown) => unknown) => callback(client),?
+    ...overrides?
+  };?
+  return client as unknown as PrismaClient;?
+}?
+?
+describe("内部员工生命周期", () => {?
+  it("调动会关闭旧任职、撤销旧范围并创建新任职和变更记录", async () => {?
+    const employmentUpdateMany = vi.fn().mockResolvedValue({ count: 1 });?
+    const employmentCreate = vi.fn().mockResolvedValue({ id: "employment-new" });?
+    const scopeUpdateMany = vi.fn().mockResolvedValue({ count: 2 });?
+    const scopeCreate = vi.fn().mockResolvedValue({ id: "scope-new" });?
+    const userUpdateMany = vi.fn().mockResolvedValue({ count: 1 });?
+    const employeeUpdate = vi.fn().mockResolvedValue({?
+      id: "employee-1",?
+      organizationUnitId: "org-b",?
+      positionId: "position-b",?
+      branchId: "branch-b",?
+      version: 4?
+    });?
+    const changeCreate = vi.fn().mockResolvedValue({ id: "change-1" });?
+    const db = transactionClient({?
+      internalEmployee: {?
+        findUnique: vi.fn().mockResolvedValue({?
+          id: "employee-1",?
+          userId: "user-1",?
+          status: "ACTIVE",?
+          organizationUnitId: "org-a",?
+          positionId: "position-a",?
+          branchId: "branch-a",?
+          version: 3?
+        }),?
+        update: employeeUpdate?
+      },?
+      internalEmployment: {?
+        updateMany: employmentUpdateMany,?
+        create: employmentCreate?
+      },?
+      dataScopeBinding: { updateMany: scopeUpdateMany, create: scopeCreate },?
+      user: { updateMany: userUpdateMany },?
+      internalEmployeeChange: { create: changeCreate }?
+    });?
+?
+    await transferInternalEmployee(db, {?
+      employeeId: "employee-1",?
+      actorId: "actor-1",?
+      expectedVersion: 3,?
+      effectiveDate: new Date("2026-08-01T00:00:00.000Z"),?
+      organizationUnitId: "org-b",?
+      positionId: "position-b",?
+      branchId: "branch-b",?
+      reason: "组织调动"?
+    });?
+?
+    expect(employmentUpdateMany).toHaveBeenCalledWith(?
+      expect.objectContaining({?
+        where: expect.objectContaining({ employeeId: "employee-1", endedAt: null })?
+      })?
+    );?
+    expect(scopeUpdateMany).toHaveBeenCalledWith(?
+      expect.objectContaining({?
+        where: expect.objectContaining({ user: { internalEmployee: { id: "employee-1" } } })?
+      })?
+    );?
+    expect(scopeCreate).toHaveBeenCalledWith({?
+      data: expect.objectContaining({?
+        userId: "user-1",?
+        type: "BRANCH",?
+        branchId: "branch-b",?
+        createdById: "actor-1"?
+      })?
+    });?
+    expect(userUpdateMany).toHaveBeenCalledWith({?
+      where: { id: "user-1", isActive: true },?
+      data: {?
+        branchId: "branch-b",?
+        tokenVersion: { increment: 1 }?
+      }?
+    });?
+    expect(employmentCreate).toHaveBeenCalledWith(?
+      expect.objectContaining({?
+        data: expect.objectContaining({?
+          employeeId: "employee-1",?
+          organizationUnitId: "org-b",?
+          positionId: "position-b"?
+        })?
+      })?
+    );?
+    expect(changeCreate).toHaveBeenCalledWith(?
+      expect.objectContaining({?
+        data: expect.objectContaining({ type: "TRANSFER", actorId: "actor-1" })?
+      })?
+    );?
+  });?
+?
+  it("离职会一次事务关闭任职并撤销账号角色和数据范围", async () => {?
+    const employmentUpdateMany = vi.fn().mockResolvedValue({ count: 1 });?
+    const roleUpdateMany = vi.fn().mockResolvedValue({ count: 2 });?
+    const scopeUpdateMany = vi.fn().mockResolvedValue({ count: 3 });?
+    const userUpdateMany = vi.fn().mockResolvedValue({ count: 1 });?
+    const db = transactionClient({
+error: patch failed: apps/api/test/internal-employee-domain.test.ts:1
+error: apps/api/test/internal-employee-domain.test.ts: patch does not apply
+Checking patch apps/api/test/internal-employee-routes.test.ts...
+error: while searching for:
+    expect(updateCalled).toBe(false);?
+  });?
+?
+  it("内部人事不能把员工调入登录态范围外的分公司", async () => {?
+    const branchId = "20000000-0000-4000-8000-000000000001";?
+    const employeeId = "30000000-0000-4000-8000-000000000001";?
+
+error: patch failed: apps/api/test/internal-employee-routes.test.ts:118
+error: apps/api/test/internal-employee-routes.test.ts: patch does not apply
+Checking patch apps/api/test/position-authorizations.test.ts...
+Checking patch apps/api/test/reimbursement-domain.test.ts...
+error: while searching for:
+?
+describe("报销七态领域", () => {?
+  it.each([?
+    { paymentCents: 10_000, invoiceCents: 10_000 },?
+    { paymentCents: 10_000, invoiceCents: 9_999 }?
+  ])("发票金额不严格大于付款金额时拒绝", (line) => {?
+    expect(() =>?
+      validateReimbursementLine({?
+        sequence: 1,?
+
+error: patch failed: apps/api/test/reimbursement-domain.test.ts:9
+error: apps/api/test/reimbursement-domain.test.ts: patch does not apply
+Checking patch apps/api/test/reimbursement-routes.test.ts...
+error: while searching for:
+    expect(JSON.stringify(listWhere)).toContain(branchId);?
+  });?
+?
+  it("创建报销单时在服务端拒绝发票金额不高于付款金额", async () => {?
+    const user = userFixture({?
+      username: "clerk",?
+      role: UserRole.DEPARTMENT_REIMBURSEMENT_CLERK,?
+
+error: patch failed: apps/api/test/reimbursement-routes.test.ts:68
+error: apps/api/test/reimbursement-routes.test.ts: patch does not apply
+Checking patch apps/api/test/reimbursements.test.ts...
+Checking patch apps/api/test/session-user.test.ts...
+error: while searching for:
+    expect(session.permissions).not.toContain(Permission.PEOPLE_READ);?
+  });?
+});?
+
+error: patch failed: apps/api/test/session-user.test.ts:82
+error: apps/api/test/session-user.test.ts: patch does not apply
+Checking patch apps/miniapp/src/api/client.ts...
+error: while searching for:
+  }?
+  return body.data;?
+}?
+
+error: patch failed: apps/miniapp/src/api/client.ts:111
+error: apps/miniapp/src/api/client.ts: patch does not apply
+Checking patch apps/miniapp/src/api/services.ts...
+error: while searching for:
+import { apiRequest, queryString, uploadFile } from "./client";?
+import type {?
+  Application,?
+  AppealRecord,?
+
+error: patch failed: apps/miniapp/src/api/services.ts:1
+error: apps/miniapp/src/api/services.ts: patch does not apply
+Checking patch apps/miniapp/src/api/types.ts...
+error: while searching for:
+export type UserRole =?
+  | "HEADQUARTERS_MANAGER"?
+  | "BRANCH_MANAGER"?
+  | "PROJECT_OPERATOR"?
+  | "RESOURCE_SPECIALIST"?
+  | "SUPPLIER"?
+  | "EMPLOYEE"?
+  | "JOB_SEEKER"?
+  | "SYSTEM_ADMIN";?
+?
+export type SessionUser = {?
+  id: string;?
+  username: string;?
+  displayName: string;?
+  role: UserRole;?
+  branchId: string | null;?
+  supplierId: string | null;?
+  personId: string | null;?
+  employeeType: string | null;?
+  projectIds: string[];?
+  permissions: string[];?
+};?
+?
+export type ApiSuccess<T> = { data: T; requestId: string };?
+
+error: patch failed: apps/miniapp/src/api/types.ts:1
+error: apps/miniapp/src/api/types.ts: patch does not apply
+Checking patch apps/miniapp/src/app.config.ts...
+error: while searching for:
+    "pages/referrals/mine/index",?
+    "pages/referrals/rewards/index",?
+    "pages/salary/index/index",?
+    "pages/profile/index/index"?
+  ],?
+  window: {?
+
+error: patch failed: apps/miniapp/src/app.config.ts:20
+error: apps/miniapp/src/app.config.ts: patch does not apply
+Checking patch apps/miniapp/src/app.scss...
+error: while searching for:
+  font-size: 22px;?
+  line-height: 1.6;?
+}?
+
+error: patch failed: apps/miniapp/src/app.scss:578
+error: apps/miniapp/src/app.scss: patch does not apply
+Checking patch apps/miniapp/src/auth/session.ts...
+error: while searching for:
+export function getSessionUser(): SessionUser | null {?
+  try {?
+    const value = Taro.getStorageSync<SessionUser>(USER_KEY);?
+    return value && typeof value === "object" ? value : null;?
+  } catch {?
+    return null;?
+  }?
+
+error: patch failed: apps/miniapp/src/auth/session.ts:16
+error: apps/miniapp/src/auth/session.ts: patch does not apply
+Checking patch apps/miniapp/src/components/form.tsx...
+error: while searching for:
+}: {?
+  value: string;?
+  placeholder: string;?
+  type?: "text" | "number" | "idcard";?
+  onChange: (value: string) => void;?
+  maxlength?: number;?
+}) {?
+
+error: patch failed: apps/miniapp/src/components/form.tsx:21
+error: apps/miniapp/src/components/form.tsx: patch does not apply
+Checking patch apps/miniapp/src/components/ui.tsx...
+error: while searching for:
+  );?
+}?
+?
+export function StatusTag({ status }: { status?: string | null }) {?
+  const positive = ["RECRUITING", "ACTIVE", "PASSED", "ARRIVED", "ACHIEVED", "PAID", "PUBLISHED"].includes(status ?? "");?
+  const negative = ["FAILED", "ABANDONED", "LEFT", "ENDED", "CANCELLED", "WITHDRAWN"].includes(status ?? "");?
+  const className = "status-tag" + (positive ? " status-tag--positive" : "") + (negative ? " status-tag--negative" : "");?
+  return <Text className={className}>{statusLabel(status)}</Text>;?
+}?
+?
+export function FieldRow({ label, value, sensitive = false }: { label: string; value?: ReactNode; sensitive?: boolean }) {?
+
+error: patch failed: apps/miniapp/src/components/ui.tsx:99
+error: apps/miniapp/src/components/ui.tsx: patch does not apply
+Checking patch apps/miniapp/src/domain/reimbursements.test.ts...
+Checking patch apps/miniapp/src/domain/reimbursements.ts...
+Checking patch apps/miniapp/src/domain/roles.test.ts...
+error: while searching for:
+import { describe, expect, it } from "vitest";?
+import type { SessionUser } from "../api/types";?
+import { menuForUser, portalForRole } from "./roles";?
+?
+const user = (role: SessionUser["role"], permissions: string[]): SessionUser => ({?
+  id: "u1",?
+  username: "tester",?
+  displayName: "测试用户",?
+  role,?
+  branchId: null,?
+  supplierId: null,?
+  personId: null,?
+  employeeType: null,?
+  projectIds: [],?
+  permissions?
+});?
+?
+describe("role portal", () => {?
+
+error: patch failed: apps/miniapp/src/domain/roles.test.ts:1
+error: apps/miniapp/src/domain/roles.test.ts: patch does not apply
+Checking patch apps/miniapp/src/domain/roles.ts...
+error: while searching for:
+import type { SessionUser, UserRole } from "../api/types";?
+?
+export type Portal = "operator" | "supplier" | "job-seeker" | "employee";?
+export type MenuItem = {?
+
+error: patch failed: apps/miniapp/src/domain/roles.ts:1
+error: apps/miniapp/src/domain/roles.ts: patch does not apply
+Checking patch apps/miniapp/src/pages/application/form/index.tsx...
+error: while searching for:
+import Taro from "@tarojs/taro";?
+import { RegistrationForm } from "../../../components/registration-form";?
+import { AccessDenied, PageShell } from "../../../components/ui";?
+import { isOperatorRole } from "../../../domain/roles";?
+import { useSession } from "../../../hooks/useSession";?
+import type { RegistrationInput } from "../../../api/types";?
+?
+
+error: patch failed: apps/miniapp/src/pages/application/form/index.tsx:1
+error: apps/miniapp/src/pages/application/form/index.tsx: patch does not apply
+Checking patch apps/miniapp/src/pages/index/index.tsx...
+error: while searching for:
+import { useEffect, useRef } from "react";?
+import { api, type OverviewStatistics } from "../../api/services";?
+import { AsyncBoundary, ConfigGapBanner, MetricGrid, PageShell, SectionCard } from "../../components/ui";?
+import { menuForUser, portalForRole, roleLabels } from "../../domain/roles";?
+import { jobDetailPath, referralTokenFromParams } from "../../domain/links";?
+import { useAsyncData } from "../../hooks/useAsyncData";?
+import { useSession } from "../../hooks/useSession";?
+
+error: patch failed: apps/miniapp/src/pages/index/index.tsx:3
+error: apps/miniapp/src/pages/index/index.tsx: patch does not apply
+Checking patch apps/miniapp/src/pages/jobs/detail/index.tsx...
+error: while searching for:
+import { runtimeConfig } from "../../../config/runtime";?
+import { formatDate, projectName } from "../../../domain/format";?
+import { jobDetailPath } from "../../../domain/links";?
+import { portalForRole } from "../../../domain/roles";?
+import { useAsyncData } from "../../../hooks/useAsyncData";?
+import { useSession } from "../../../hooks/useSession";?
+?
+
+error: patch failed: apps/miniapp/src/pages/jobs/detail/index.tsx:8
+error: apps/miniapp/src/pages/jobs/detail/index.tsx: patch does not apply
+Checking patch apps/miniapp/src/pages/jobs/index/index.tsx...
+error: while searching for:
+import { useMemo, useState } from "react";?
+import { allJobs, allPublicJobs } from "../../../api/services";?
+import { AccessDenied, AsyncBoundary, JobCard, PageShell } from "../../../components/ui";?
+import { portalForRole } from "../../../domain/roles";?
+import { jobDetailPath } from "../../../domain/links";?
+import { useAsyncData } from "../../../hooks/useAsyncData";?
+import { useSession } from "../../../hooks/useSession";?
+
+error: patch failed: apps/miniapp/src/pages/jobs/index/index.tsx:3
+error: apps/miniapp/src/pages/jobs/index/index.tsx: patch does not apply
+Checking patch apps/miniapp/src/pages/referrals/index/index.tsx...
+error: while searching for:
+import { useSession } from "../../../hooks/useSession";?
+import { localMonthString } from "../../../domain/format";?
+import { jobDetailPath } from "../../../domain/links";?
+?
+export default function ReferralHomePage() {?
+  const user = useSession();?
+
+error: patch failed: apps/miniapp/src/pages/referrals/index/index.tsx:6
+error: apps/miniapp/src/pages/referrals/index/index.tsx: patch does not apply
+Checking patch apps/miniapp/src/pages/referrals/mine/index.tsx...
+error: while searching for:
+import { formatDate, formatMoney, projectName } from "../../../domain/format";?
+import { useAsyncData } from "../../../hooks/useAsyncData";?
+import { useSession } from "../../../hooks/useSession";?
+?
+export default function MyReferralsPage() {?
+  const user = useSession();?
+  const referrals = useAsyncData(() => api.myReferrals(), []);?
+  if (!user) return <PageShell title="我的推荐" />;?
+  if (user.role !== "EMPLOYEE") return <AccessDenied />;?
+  const items = referrals.data ? itemsOf(referrals.data) : [];?
+  return (?
+    <PageShell title="我的推荐" subtitle="被推荐人的身份证、附件、保险和供应商政策不会在此显示">?
+
+error: patch failed: apps/miniapp/src/pages/referrals/mine/index.tsx:3
+error: apps/miniapp/src/pages/referrals/mine/index.tsx: patch does not apply
+Checking patch apps/miniapp/src/pages/referrals/rewards/index.tsx...
+error: while searching for:
+import { formatDate, formatMoney } from "../../../domain/format";?
+import { useAsyncData } from "../../../hooks/useAsyncData";?
+import { useSession } from "../../../hooks/useSession";?
+?
+export default function ReferralRewardsPage() {?
+  const user = useSession();?
+  const rewards = useAsyncData(() => api.myRewards(), []);?
+  if (!user) return <PageShell title="推荐奖励" />;?
+  if (user.role !== "EMPLOYEE") return <AccessDenied />;?
+  const items = rewards.data ? itemsOf(rewards.data) : [];?
+  return (?
+    <PageShell title="推荐奖励" subtitle="奖励金额和达成条件来自报名时绑定的政策版本">?
+
+error: patch failed: apps/miniapp/src/pages/referrals/rewards/index.tsx:3
+error: apps/miniapp/src/pages/referrals/rewards/index.tsx: patch does not apply
+Checking patch apps/miniapp/src/pages/reimbursements/detail/index.config.ts...
+Checking patch apps/miniapp/src/pages/reimbursements/detail/index.tsx...
+Checking patch apps/miniapp/src/pages/reimbursements/form/index.config.ts...
+Checking patch apps/miniapp/src/pages/reimbursements/form/index.tsx...
+Checking patch apps/miniapp/src/pages/reimbursements/index/index.config.ts...
+Checking patch apps/miniapp/src/pages/reimbursements/index/index.tsx...
+Checking patch apps/miniapp/src/pages/salary/index/index.tsx...
+error: while searching for:
+import { formatMoney } from "../../../domain/format";?
+import { useAsyncData } from "../../../hooks/useAsyncData";?
+import { useSession } from "../../../hooks/useSession";?
+?
+export default function SalarySlipsPage() {?
+  const user = useSession();?
+  const salarySlips = useAsyncData(() => api.mySalarySlips(), []);?
+  if (!user) return <PageShell title="我的工资条" />;?
+  if (user.role !== "EMPLOYEE" || !user.permissions.includes("salary:self-read")) {?
+    return <AccessDenied message="工资条仅允许已绑定人员档案的员工本人查看。" />;?
+  }?
+  const items = salarySlips.data ? itemsOf(salarySlips.data) : [];?
+
+error: patch failed: apps/miniapp/src/pages/salary/index/index.tsx:3
+error: apps/miniapp/src/pages/salary/index/index.tsx: patch does not apply
+Checking patch docs/data-model.md...
+error: while searching for:
+?
+固定校验：?
+?
+- 每条明细 `invoiceCents > paymentCents > 0`。?
+- 批次金额由明细聚合，不接受前端提交的合计覆盖。?
+- `(batchId, sequence)` 唯一。?
+- `(batchId, status, version)` 用于并发更新前置条件。?
+
+error: patch failed: docs/data-model.md:68
+error: docs/data-model.md: patch does not apply
+Checking patch docs/permission-matrix.md...
+error: while searching for:
+- 模型输出不能提升权限，不能指定其他分公司、项目或供应商绕过范围。?
+- 入离职确认 token 绑定当前用户、操作、人员、预览版本和过期时间。?
+?
+
+error: patch failed: docs/permission-matrix.md:60
+error: docs/permission-matrix.md: patch does not apply
+Checking patch docs/reimbursement-miniapp-and-position-permissions.md...
+Checking patch docs/reports/reimbursement-permissions-verification-2026-07-27.md...
+Checking patch docs/superpowers/plans/2026-07-27-reimbursement-permissions.md...
+Checking patch packages/shared/src/api.ts...
+error: while searching for:
+import type { UserRole as UserRoleValue } from "./enums.js";?
+import type { DataScopeType, Permission } from "./permissions.js";?
+?
+export type ApiSuccess<T> = { data: T; requestId: string };?
+export type ApiFailure = {?
+  error: { code: string; message: string; details?: unknown };?
+  requestId: string;?
+};?
+?
+export type PaginationMeta = {?
+  page: number;?
+  pageSize: number;?
+  total: number;?
+  totalPages: number;?
+};?
+?
+export type Paginated<T> = { items: T[]; pagination: PaginationMeta };?
+?
+export type SessionUser = {?
+  id: string;?
+  username: string;?
+  displayName: string;?
+  role: UserRoleValue;?
+  roles: UserRoleValue[];?
+  branchId: string | null;?
+  supplierId: string | null;?
+  personId: string | null;?
+  employeeType: string | null;?
+  projectIds: string[];?
+  permissions: Permission[];?
+  scopeBindings: Array<{?
+    type: DataScopeType;?
+    organizationUnitId: string | null;?
+    branchId: string | null;?
+    projectId: string | null;?
+    supplierId: string | null;?
+  }>;?
+};?
+?
+export type ImportPreview<T> = {?
+  sourceFile: string;?
+  sourceHash: string;?
+  totalRows: number;?
+  accepted: T[];?
+  skipped: Array<{ row: number; reason: string }>;?
+  warnings: Array<{ row?: number; code: string; message: string }>;?
+  reconciliation: Record<string, number>;?
+};?
+
+error: patch failed: packages/shared/src/api.ts:1
+error: packages/shared/src/api.ts: patch does not apply
+Checking patch prisma/migrations/20260727090000_position_role_bindings/migration.sql...
+Checking patch prisma/migrations/20260727091000_reimbursement_invoice_cover/migration.sql...
+Checking patch prisma/migrations/20260727100000_job_grade_reimbursement_policies/migration.sql...
+Checking patch prisma/migrations/20260727101000_internal_employee_account_binding/migration.sql...
+Checking patch prisma/schema.prisma...
+error: while searching for:
+generator client {?
+  provider     = "prisma-client"?
+  output       = "../apps/api/src/generated/prisma"?
+  moduleFormat = "esm"?
+}?
+?
+datasource db {?
+  provider = "postgresql"?
+  url      = env("DATABASE_URL")?
+}?
+?
+enum UserRole {?
+  SUPER_ADMIN?
+  SYSTEM_ADMIN?
+  GROUP_LEADER?
+  HEADQUARTERS_MANAGER?
+  BRANCH_MANAGER?
+  DEPARTMENT_MANAGER?
+  INTERNAL_HR?
+  RECRUITER?
+  PROJECT_OPERATOR?
+  RESOURCE_SPECIALIST?
+  FINANCE_REVIEWER?
+  CASHIER?
+  DEPARTMENT_REIMBURSEMENT_CLERK?
+  SUPPLIER_ADMIN?
+  SUPPLIER?
+  OUTSOURCED_EMPLOYEE?
+  EMPLOYEE?
+  JOB_SEEKER?
+}?
+?
+enum ProjectStatus {?
+  ACTIVE?
+  PAUSED?
+  HISTORICAL?
+  PENDING_CONFIRMATION?
+}?
+?
+enum ResponsibilityType {?
+  CLIENT?
+  OURS?
+  JOINT?
+  PENDING_CONFIRMATION?
+}?
+?
+enum InterviewStatus {?
+  PENDING_ARRIVAL?
+  ARRIVED?
+  PASSED?
+  FAILED?
+  ABANDONED?
+}?
+?
+enum EmploymentStatus {?
+  APPLICANT?
+  INTERVIEWING?
+  PENDING_ONBOARD?
+  ACTIVE?
+  LEFT?
+}?
+?
+enum PolicyType {?
+  SUPPLIER?
+  EMPLOYEE_REFERRAL?
+}?
+?
+enum JobStatus {?
+  RECRUITING?
+  PAUSED?
+  FILLED?
+  ENDED?
+}?
+?
+enum ApplicationSource {?
+  OPERATOR?
+  SUPPLIER?
+  SELF?
+  REFERRAL?
+}?
+?
+enum RewardStatus {?
+  PENDING?
+  ACHIEVED?
+  PAID?
+  CANCELLED?
+}?
+?
+enum SalarySlipStatus {?
+  DRAFT?
+  PUBLISHED?
+  WITHDRAWN?
+}?
+?
+enum ImportStatus {?
+  PREVIEW?
+  COMMITTED?
+  PARTIAL?
+  FAILED?
+}?
+?
+enum NotificationStatus {?
+  PENDING?
+  SENT?
+  FAILED?
+  SKIPPED_NOT_CONFIGURED?
+}?
+?
+enum AiActionStatus {?
+  PREVIEWED?
+  EXECUTED?
+  CANCELLED?
+  EXPIRED?
+  FAILED?
+}?
+?
+enum OrganizationUnitType {?
+  GROUP?
+  LEGAL_ENTITY?
+  BRANCH?
+  CENTER?
+  DEPARTMENT?
+}?
+?
+enum InternalEmployeeStatus {?
+  ACTIVE?
+  DISABLED?
+  LEFT?
+  ARCHIVED?
+}?
+?
+enum InternalEmployeeChangeType {?
+  ONBOARD?
+  TRANSFER?
+  DISABLE?
+  ENABLE?
+  OFFBOARD?
+  ARCHIVE?
+}?
+?
+enum RoleAssignmentStatus {?
+  ACTIVE?
+  REVOKED?
+  EXPIRED?
+}?
+?
+enum DataScopeType {?
+  SELF?
+  ORG_UNIT?
+  CENTER?
+  BRANCH?
+  PROJECT?
+  SUPPLIER?
+  GROUP?
+}?
+?
+enum ReimbursementStatus {?
+  PENDING_SUBMISSION?
+  DEPARTMENT_PREPARING?
+  OWNER_REVIEWING?
+  FINANCE_REVIEWING?
+  APPROVED?
+  PENDING_PAYMENT?
+  PAID?
+}?
+?
+enum ReimbursementAttachmentType {?
+  PAYMENT_VOUCHER?
+  INVOICE?
+  SUPPORTING?
+}?
+?
+enum ReimbursementIssueStatus {?
+  OPEN?
+  RESOLVED?
+}?
+?
+enum ReimbursementApprovalDecision {?
+  APPROVED?
+  REJECTED?
+  RETURNED?
+}?
+?
+enum ReimbursementArtifactType {?
+  REIMBURSEMENT_FORM?
+  PAYMENT_PACKAGE?
+  INVOICE_PACKAGE?
+}?
+?
+enum ReimbursementArtifactStatus {?
+  PENDING?
+  GENERATED?
+  FAILED?
+}?
+?
+model Branch {?
+  id         String    @id @default(uuid()) @db.Uuid?
+  sourceCode String?   @unique @map("source_code") @db.VarChar(64)?
+  name       String    @unique @db.VarChar(200)?
+  remark     String?   @db.Text?
+  createdAt  DateTime  @default(now()) @map("created_at")?
+  updatedAt  DateTime  @updatedAt @map("updated_at")?
+  projects   Project[]?
+  users      User[]?
+  organizationUnits OrganizationUnit[]?
+  internalEmployees InternalEmployee[]?
+  internalEmployments InternalEmployment[]?
+  dataScopeBindings DataScopeBinding[]?
+  reimbursementBatches ReimbursementBatch[]?
+?
+  @@map("branches")?
+}?
+?
+model LegalEntity {?
+  id          String   @id @default(uuid()) @db.Uuid?
+  code        String   @unique @db.VarChar(64)?
+  name        String   @unique @db.VarChar(200)?
+  taxNumber   String?  @unique @map("tax_number") @db.VarChar(64)?
+  isActive    Boolean  @default(true) @map("is_active")?
+  createdAt   DateTime @default(now()) @map("created_at")?
+  updatedAt   DateTime @updatedAt @map("updated_at")?
+  organizationUnits OrganizationUnit[]?
+  internalEmployees InternalEmployee[]?
+  employments InternalEmployment[]?
+?
+  @@index([isActive, name])?
+  @@map("legal_entities")?
+}?
+?
+model OrganizationUnit {?
+  id            String               @id @default(uuid()) @db.Uuid?
+  code          String               @unique @db.VarChar(64)?
+  name          String               @db.VarChar(200)?
+  type          OrganizationUnitType?
+  parentId      String?              @map("parent_id") @db.Uuid?
+  legalEntityId String?              @map("legal_ent
+error: patch failed: prisma/schema.prisma:1
+error: prisma/schema.prisma: patch does not apply
+Checking patch scripts/import-demo-data.mts...
+error: while searching for:
+import { createHash, randomBytes } from "node:crypto";?
+import { fileURLToPath } from "node:url";?
+import { hash } from "../apps/api/node_modules/bcryptjs/index.js";?
+import { PrismaClient } from "../apps/api/src/generated/prisma/client.js";?
+import {?
+  Permission,?
+  UserRole as SharedUserRole,?
+  rolePermissions?
+} from "../packages/shared/src/index.js";?
+import { loadPublicDemoData } from "./lib/public-demo-data.mjs";?
+?
+type JsonRecord = Record<string, any>;?
+?
+const inputPath = fileURLToPath(new URL("../data/synthetic/demo-data.json", import.meta.url));?
+const data = await loadPublicDemoData(inputPath);?
+?
+const databaseUrl = process.env.DATABASE_URL;?
+if (!databaseUrl) throw new Error("DATABASE_URL is required");?
+const databaseName = new URL(databaseUrl).pathname.toLowerCase();?
+if (!databaseName.includes("xiangneng") && !databaseName.includes("demo")) {?
+  throw new Error(`Refusing demo import into unexpected database: ${databaseName}`);?
+}?
+?
+const prisma = new PrismaClient({ datasourceUrl: databaseUrl });?
+?
+function uuid(source: string): string {?
+  const hex = createHash("sha256").update(`xiangneng-demo:${source}`).digest("hex").slice(0, 32).split("");?
+  hex[12] = "4";?
+  hex[16] = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);?
+  return `${hex.slice(0, 8).join("")}-${hex.slice(8, 12).join("")}-${hex.slice(12, 16).join("")}-${hex.slice(16, 20).join("")}-${hex.slice(20).join("")}`;?
+}?
+?
+function idCard(person: JsonRecord): string {?
+  if (typeof person.idCard === "string" && person.idCard.trim()) return person.idCard.trim();?
+  return `MISSING-${createHash("sha256").update(person.id).digest("hex").slice(0, 10)}`;?
+}?
+?
+function date(value: unknown): Date | null {?
+  if (typeof value !== "string" || !value) return null;?
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);?
+  return Number.isNaN(parsed.getTime()) ? null : parsed;?
+}?
+?
+function dateTime(value: unknown): Date {?
+  return date(value) ?? new Date();?
+}?
+?
+async function batches<T>(rows: T[], create: (batch: T[]) => Promise<unknown>, size = 500): Promise<void> {?
+  for (let offset = 0; offset < rows.length; offset += size) {?
+    await create(rows.slice(offset, offset + size));?
+  }?
+}?
+?
+const branchBySource = new Map<string, JsonRecord>();?
+for (const branch of data.branches) branchBySource.set(branch.id, branch);?
+for (const project of data.projects) {?
+  if (!branchBySource.has(project.branchId)) {?
+    throw new Error(`Project ${project.id} references missing branch ${project.branchId}`);?
+  }?
+}?
+const projectSources = new Set(data.projects.map((item) => item.id));?
+const supplierSources = new Set(data.suppliers.map((item) => item.id));?
+?
+const topJobBySuffix = new Map(data.jobDemands.map((job) => [job.id.replace(/^job-demand-/, ""), job]));?
+const canonicalJobSource = (sourceId: string): string => {?
+  const suffix = sourceId.replace(/^job-row-/, "").replace(/^job-demand-/, "");?
+  return topJobBySuffix.get(suffix)?.id ?? sourceId;?
+};?
+const nestedJobs = new Map<string, JsonRecord>();?
+for (const job of data.jobDemands) nestedJobs.set(job.id, job);?
+for (const application of data.applications) {?
+  if (application.jobDemand?.id) {?
+    const canonicalId = canonicalJobSource(application.jobDemand.id);?
+    if (!nestedJobs.has(canonicalId)) nestedJobs.set(canonicalId, { ...application.jobDemand, id: canonicalId });?
+  }?
+}?
+?
+const demoEmployeeSource = data.people.find((person) => person.status === "ACTIVE" && projectSources.has(person.projectId)) ?? data.people[0]!;?
+const supplierUseCounts = new Map<string, number>();?
+for (const person of data.people) {?
+  if (person.supplierId && supplierSources.has(person.supplierId)) {?
+    supplierUseCounts.set(person.supplierId, (supplierUseCounts.get(person.supplierId) ?? 0) + 1);?
+  }?
+}?
+const demoSupplierSourceId = [...supplierUseCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? data.suppliers[0]!.id;?
+const demoSupplier = data.suppliers.find((supplier) => supplier.id === demoSupplierSourceId) ?? data.suppliers[0]!;?
+c
+error: patch failed: scripts/import-demo-data.mts:1
+error: scripts/import-demo-data.mts: patch does not apply
+APPLY_STATUS=1
