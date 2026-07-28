@@ -109,7 +109,7 @@ jobs:
           print(f'Validated marker bundle: bytes={len(archive)} sha256={actual_sha}')
           PY
 
-      - name: Extract verified upgrade bundle
+      - name: Extract and normalize verified upgrade bundle
         run: |
           set -euo pipefail
           tar -tJf /tmp/xiangneng-upgrade-bundle.tar.xz
@@ -117,6 +117,10 @@ jobs:
           patch_count=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*.patch' | wc -l)
           echo "Extracted patch count: ${patch_count}"
           test "${patch_count}" -eq 3
+          while IFS= read -r -d '' patch_file; do
+            echo "Normalizing patch line endings: $(basename "$patch_file")"
+            sed -i 's/\r$//' "$patch_file"
+          done < <(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*.patch' -print0)
 
       - name: Apply reimbursement and role patch
         run: |
