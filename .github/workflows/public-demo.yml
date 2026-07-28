@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - agent/public-demo-20260727
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -14,7 +11,7 @@ permissions:
   issues: read
 
 concurrency:
-  group: xiangneng-public-demo
+  group: xiangneng-public-demo-push
   cancel-in-progress: true
 
 jobs:
