@@ -1,0 +1,1 @@
+import{j as a,a0 as o}from"./index-CxruAQzz.js";function c({options:r,...t}){return a.jsx(o,{allowClear:!0,showSearch:!0,optionFilterProp:"searchText",options:r.map(e=>({...e,searchText:e.searchText??e.label})),...t})}export{c as R};

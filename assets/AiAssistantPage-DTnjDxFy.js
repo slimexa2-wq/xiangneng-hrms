@@ -1,0 +1,1 @@
+import{j as a,i as s,n as e,a_ as i}from"./index-CxruAQzz.js";function r(){return a.jsxs("div",{className:"page-container",children:[a.jsx(s.Title,{level:3,children:"祥能AI业务助手"}),a.jsx(s.Paragraph,{type:"secondary",children:"本地 Qwen3.5 4B 负责意图理解，所有查询和写操作均由正式业务服务按当前登录权限执行。"}),a.jsx(e,{className:"admin-ai-page-card",children:a.jsx(i,{})})]})}export{r as AiAssistantPage};

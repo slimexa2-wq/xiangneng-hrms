@@ -1,0 +1,1 @@
+import{U as e,j as i}from"./index-CxruAQzz.js";import{R as o}from"./format-BAujLVB7.js";function m({permission:t,fallback:s,children:r}){const{can:u}=e();return u(t)?r:s??i.jsx(o,{status:"403",title:"无权访问",subTitle:"当前账号没有此项功能权限。"})}export{m as P};
