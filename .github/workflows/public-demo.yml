@@ -1,9 +1,9 @@
 name: Build public demo
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/public-demo-20260727
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,16 +11,20 @@ permissions:
   issues: read
 
 concurrency:
-  group: xiangneng-public-demo-push
+  group: xiangneng-public-demo-pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Checkout source
+      - name: Checkout source branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Upgrade source to latest verified baseline
         id: upgrade
@@ -138,7 +142,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b public-demo-upgrade-debug
           git add UPGRADE_LOG.txt
-          git commit -m "debug: public demo upgrade ${GITHUB_SHA}"
+          git commit -m "debug: public demo upgrade ${SOURCE_SHA}"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin public-demo-upgrade-debug
 
@@ -187,7 +191,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b public-demo-debug
           git add BUILD_LOG.txt
-          git commit -m "debug: public demo build ${GITHUB_SHA}"
+          git commit -m "debug: public demo build ${SOURCE_SHA}"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin public-demo-debug
 
@@ -201,7 +205,7 @@ jobs:
           cp apps/sites-demo/dist/client/index.html apps/sites-demo/dist/client/404.html
           cat > apps/sites-demo/dist/client/deployment-info.json <<JSON
           {
-            "sourceCommit": "${GITHUB_SHA}",
+            "sourceCommit": "${SOURCE_SHA}",
             "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "dataMode": "synthetic-offline-demo"
           }
@@ -217,7 +221,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b public-demo
           git add -A
-          git commit -m "deploy: public demo ${GITHUB_SHA}"
+          git commit -m "deploy: public demo ${SOURCE_SHA}"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin public-demo
 
