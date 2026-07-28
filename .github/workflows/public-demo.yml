@@ -118,20 +118,32 @@ jobs:
           echo "Extracted patch count: ${patch_count}"
           test "${patch_count}" -eq 3
 
-      - name: Apply verified upgrade patches
+      - name: Apply reimbursement and role patch
         run: |
           set -euo pipefail
-          apply_patch() {
-            pattern="$1"
-            patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name "$pattern" -print -quit)
-            test -n "$patch_file"
-            echo "Applying $(basename "$patch_file")"
-            git apply --check "$patch_file"
-            git apply --whitespace=nowarn "$patch_file"
-          }
-          apply_patch "*小程序报销与岗位职级权限优化-20260727.patch"
-          apply_patch "*内部组织按业务部门修正版-20260727.patch"
-          apply_patch "*AI模块化维护基础优化-20260727.patch"
+          patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*小程序报销与岗位职级权限优化-20260727.patch' -print -quit)
+          test -n "$patch_file"
+          echo "Applying $(basename "$patch_file")"
+          git apply --check --verbose "$patch_file"
+          git apply --whitespace=nowarn "$patch_file"
+
+      - name: Apply internal organization correction patch
+        run: |
+          set -euo pipefail
+          patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*内部组织按业务部门修正版-20260727.patch' -print -quit)
+          test -n "$patch_file"
+          echo "Applying $(basename "$patch_file")"
+          git apply --check --verbose "$patch_file"
+          git apply --whitespace=nowarn "$patch_file"
+
+      - name: Apply AI maintainability patch
+        run: |
+          set -euo pipefail
+          patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*AI模块化维护基础优化-20260727.patch' -print -quit)
+          test -n "$patch_file"
+          echo "Applying $(basename "$patch_file")"
+          git apply --check --verbose "$patch_file"
+          git apply --whitespace=nowarn "$patch_file"
 
       - name: Normalize and verify upgraded source
         run: |
