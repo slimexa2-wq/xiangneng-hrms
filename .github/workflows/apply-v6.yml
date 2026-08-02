@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - codex/miniapp-complete-v6
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
