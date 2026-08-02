@@ -30,6 +30,8 @@ jobs:
         shell: bash
         run: |
           gh api "repos/${{ github.repository }}/issues/5/comments?per_page=100" > /tmp/comments.json
+          echo "comment inventory:"
+          jq -r 'sort_by(.id)[] | [.id, (.body | length), (.body[0:24])] | @tsv' /tmp/comments.json
           jq -r 'sort_by(.id)[] | select((.body | length) > 1000) | select(.body | test("^[A-Za-z0-9+/=]+$")) | .body' \
             /tmp/comments.json | tr -d '\n' > /tmp/v6delta.b64
           echo "payload comments: $(jq '[.[] | select((.body | length) > 1000) | select(.body | test("^[A-Za-z0-9+/=]+$"))] | length' /tmp/comments.json)"
