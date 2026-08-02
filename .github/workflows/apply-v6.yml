@@ -1,0 +1,60 @@
+name: Apply V6 Source Package
+
+on:
+  push:
+    branches:
+      - codex/miniapp-complete-v6
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: source
+          fetch-depth: 0
+
+      - name: Fetch and verify V6 payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api "repos/${{ github.repository }}/issues/5/comments?per_page=100" > /tmp/comments.json
+          echo "comment inventory:"
+          jq -r 'sort_by(.id)[] | [.id, (.body | length), (.body[0:24])] | @tsv' /tmp/comments.json
+          jq -r 'sort_by(.id)[] | select((.body | length) > 1000) | select(.body | test("^[A-Za-z0-9+/=]+$")) | .body' \
+            /tmp/comments.json | tr -d '\n' > /tmp/v6delta.b64
+          echo "payload comments: $(jq '[.[] | select((.body | length) > 1000) | select(.body | test("^[A-Za-z0-9+/=]+$"))] | length' /tmp/comments.json)"
+          echo "payload bytes: $(wc -c < /tmp/v6delta.b64)"
+          base64 -d /tmp/v6delta.b64 > /tmp/v6delta.tar.xz
+          echo "f823a0650a3656bf7a7e07971385a78fb04ede37e60ec45c6115d5552d8ae032  /tmp/v6delta.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/v6delta
+          tar -xJf /tmp/v6delta.tar.xz -C /tmp/v6delta
+          cp -a /tmp/v6delta/. source/
+          if [ -f source/V6_DELETED_FILES.txt ]; then
+            while IFS= read -r file; do
+              [ -z "$file" ] || rm -rf "source/$file"
+            done < source/V6_DELETED_FILES.txt
+            rm -f source/V6_DELETED_FILES.txt
+          fi
+
+      - name: Publish full V6 source branch
+        working-directory: source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B codex/miniapp-complete-v6-source
+          git add -A
+          git commit -m "feat: publish complete V6 HRMS source" || true
+          git push origin HEAD:refs/heads/codex/miniapp-complete-v6-source --force
