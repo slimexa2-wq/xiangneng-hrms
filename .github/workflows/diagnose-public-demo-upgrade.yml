@@ -1,0 +1,102 @@
+name: Diagnose public demo first patch
+
+on:
+  push:
+    branches:
+      - agent/public-demo-20260727
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      EXPECTED_SHA256: 198f75a2897f10736792f252274f09d55dd0e8367f11f7478274702e72c92b0e
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+
+      - name: Reconstruct bundle and diagnose first patch
+        id: diagnostic
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/xiangneng-patch-debug /tmp/xiangneng-upgrade-patches
+          mkdir -p /tmp/xiangneng-patch-debug /tmp/xiangneng-upgrade-patches
+          python - <<'PY'
+          import base64, hashlib, json, os, re, urllib.request
+          repo = os.environ['GITHUB_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          comments = []
+          page = 1
+          while True:
+              req = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/issues/1/comments?per_page=100&page={page}',
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'xiangneng-patch-debugger'
+                  }
+              )
+              with urllib.request.urlopen(req) as response:
+                  batch = json.load(response)
+              comments.extend(batch)
+              if len(batch) < 100:
+                  break
+              page += 1
+          marker = re.compile(r'^XIANGNENG_PATCH_PART_(\d{2})_12$')
+          parts = {}
+          for comment in comments:
+              lines = (comment.get('body') or '').splitlines()
+              if not lines:
+                  continue
+              match = marker.fullmatch(lines[0].strip())
+              if match:
+                  part = int(match.group(1))
+                  if part in parts:
+                      raise SystemExit(f'duplicate marker {part:02d}')
+                  parts[part] = ''.join(lines[1:]).strip()
+          if sorted(parts) != list(range(1, 13)):
+              raise SystemExit(f'marker mismatch {sorted(parts)}')
+          archive = base64.b64decode(''.join(parts[i] for i in range(1, 13)), validate=True)
+          actual = hashlib.sha256(archive).hexdigest()
+          if actual != os.environ['EXPECTED_SHA256']:
+              raise SystemExit(f'archive sha mismatch {actual}')
+          open('/tmp/xiangneng-upgrade-bundle.tar.xz', 'wb').write(archive)
+          PY
+          tar -xJf /tmp/xiangneng-upgrade-bundle.tar.xz -C /tmp/xiangneng-upgrade-patches
+          patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name '*小程序报销与岗位职级权限优化-20260727.patch' -print -quit)
+          {
+            echo "HEAD=$(git rev-parse HEAD)"
+            echo "PATCH=$(basename "$patch_file")"
+            echo "PATCH_SHA256=$(sha256sum "$patch_file" | awk '{print $1}')"
+            echo "=== PATCH FILES ==="
+            grep '^diff --git ' "$patch_file" || true
+            echo "=== APPLY CHECK ==="
+            set +e
+            git apply --check --verbose "$patch_file"
+            status=$?
+            set -e
+            echo "APPLY_STATUS=${status}"
+          } > /tmp/xiangneng-patch-debug/FIRST_PATCH_LOG.txt 2>&1
+          printf '%s\n' "sourceCommit=$(git rev-parse HEAD)" "applyStatus=$(grep '^APPLY_STATUS=' /tmp/xiangneng-patch-debug/FIRST_PATCH_LOG.txt | cut -d= -f2)" > /tmp/xiangneng-patch-debug/STATUS.txt
+          cat /tmp/xiangneng-patch-debug/FIRST_PATCH_LOG.txt
+
+      - name: Publish first patch diagnostic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd /tmp/xiangneng-patch-debug
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo-patch-debug
+          git add FIRST_PATCH_LOG.txt STATUS.txt
+          git commit -m "debug: first patch ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo-patch-debug
