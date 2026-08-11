@@ -1,0 +1,178 @@
+name: Build latest public demo
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xiangneng-latest-public-demo
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply and verify latest upgrades
+        id: upgrade
+        continue-on-error: true
+        run: |
+          set +e
+          bash .github/deployment/apply-latest-upgrades.sh > latest-upgrade.log 2>&1
+          status=$?
+          cat latest-upgrade.log
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Publish failed upgrade log
+        if: steps.upgrade.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/xiangneng-public-demo-upgrade-debug
+          cp latest-upgrade.log /tmp/xiangneng-public-demo-upgrade-debug/UPGRADE_LOG.txt
+          cd /tmp/xiangneng-public-demo-upgrade-debug
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo-upgrade-debug
+          git add UPGRADE_LOG.txt
+          git commit -m "debug: latest public demo upgrade ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo-upgrade-debug
+
+      - name: Stop after failed upgrade
+        if: steps.upgrade.outcome == 'failure'
+        run: exit 1
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Verify project architecture
+        run: pnpm project:verify
+
+      - name: Typecheck latest source
+        run: pnpm typecheck
+
+      - name: Run latest test suite
+        run: pnpm test
+
+      - name: Build isolated synthetic-data demo
+        id: build
+        continue-on-error: true
+        env:
+          PUBLIC_DEMO_ROOT: ./
+          PUBLIC_DEMO_ROUTER_MODE: hash
+        run: |
+          set +e
+          pnpm build:public-demo > public-demo-build.log 2>&1
+          status=$?
+          cat public-demo-build.log
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Publish failed build log
+        if: steps.build.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/xiangneng-public-demo-debug
+          cp public-demo-build.log /tmp/xiangneng-public-demo-debug/BUILD_LOG.txt
+          cd /tmp/xiangneng-public-demo-debug
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo-debug
+          git add BUILD_LOG.txt
+          git commit -m "debug: latest public demo build ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo-debug
+
+      - name: Stop after failed build
+        if: steps.build.outcome == 'failure'
+        run: exit 1
+
+      - name: Verify latest feature markers in artifact
+        run: |
+          grep -R -q '报销' apps/sites-demo/dist/client
+          grep -R -q '岗位' apps/sites-demo/dist/client
+          grep -R -q '业务部门' apps/sites-demo/dist/client
+
+      - name: Add static hosting metadata
+        run: |
+          touch apps/sites-demo/dist/client/.nojekyll
+          cp apps/sites-demo/dist/client/index.html apps/sites-demo/dist/client/404.html
+          cat > apps/sites-demo/dist/client/deployment-info.json <<JSON
+          {
+            "sourceCommit": "${GITHUB_SHA}",
+            "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "dataMode": "synthetic-offline-demo",
+            "upgradeMode": "verified-three-patch-chain",
+            "features": [
+              "reimbursement-and-position-permissions",
+              "department-based-internal-organization",
+              "ai-maintainability-foundation"
+            ]
+          }
+          JSON
+
+      - name: Publish latest public-demo branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The legacy workflow is shorter; this small delay ensures the verified latest build publishes last.
+          sleep 30
+          cd apps/sites-demo/dist/client
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo
+          git add -A
+          git commit -m "deploy: latest public demo ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo
+
+      - name: Verify public demo URLs
+        run: |
+          verify_url() {
+            url="$1"
+            for attempt in $(seq 1 18); do
+              echo "Checking ${url} (attempt ${attempt}/18)"
+              if curl --fail --silent --show-error --location --max-time 30 "$url" > /tmp/public-demo-page.html \
+                && grep -q "祥能" /tmp/public-demo-page.html; then
+                echo "Verified ${url}"
+                return 0
+              fi
+              sleep 10
+            done
+            echo "Public demo URL did not become healthy: ${url}" >&2
+            return 1
+          }
+
+          verify_url "https://raw.githack.com/slimexa2-wq/xiangneng-hrms/public-demo/index.html"
+          verify_url "https://raw.githack.com/slimexa2-wq/xiangneng-hrms/public-demo/portal/index.html"
+          curl --fail --silent --show-error --location \
+            "https://raw.githack.com/slimexa2-wq/xiangneng-hrms/public-demo/deployment-info.json" \
+            | grep -q 'verified-three-patch-chain'

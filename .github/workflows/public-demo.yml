@@ -1,0 +1,183 @@
+name: Build public demo
+
+on:
+  push:
+    branches:
+      - agent/public-demo-20260727
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xiangneng-public-demo
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Upgrade source to latest verified baseline
+        id: upgrade
+        continue-on-error: true
+        run: |
+          set +e
+          {
+            set -e
+            rm -rf /tmp/xiangneng-upgrade-patches
+            mkdir -p /tmp/xiangneng-upgrade-patches
+            tar -xzf .github/deployment/upgrade-patches.tar.gz -C /tmp/xiangneng-upgrade-patches
+
+            apply_patch() {
+              pattern="$1"
+              patch_file=$(find /tmp/xiangneng-upgrade-patches -maxdepth 1 -type f -name "$pattern" -print -quit)
+              if [ -z "$patch_file" ]; then
+                echo "Missing verified upgrade patch: $pattern" >&2
+                return 1
+              fi
+              echo "Applying $(basename "$patch_file")"
+              git apply --check "$patch_file"
+              git apply --whitespace=nowarn "$patch_file"
+            }
+
+            apply_patch "*小程序报销与岗位职级权限优化-20260727.patch"
+            apply_patch "*内部组织按业务部门修正版-20260727.patch"
+            apply_patch "*AI模块化维护基础优化-20260727.patch"
+
+            echo "Normalize patched text line endings"
+            while IFS= read -r -d '' file; do
+              case "$file" in
+                *.ts|*.tsx|*.js|*.mjs|*.cjs|*.json|*.md|*.prisma|*.sql|*.yml|*.yaml|*.css|*.scss|*.sass|*.less|*.html|*.txt)
+                  sed -i 's/\r$//' "$file"
+                  ;;
+              esac
+            done < <(git diff --name-only --diff-filter=ACM -z)
+            git diff --check
+          } > public-demo-upgrade.log 2>&1
+          status=$?
+          cat public-demo-upgrade.log
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Publish failed upgrade log
+        if: steps.upgrade.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/xiangneng-public-demo-upgrade-debug
+          cp public-demo-upgrade.log /tmp/xiangneng-public-demo-upgrade-debug/UPGRADE_LOG.txt
+          cd /tmp/xiangneng-public-demo-upgrade-debug
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo-upgrade-debug
+          git add UPGRADE_LOG.txt
+          git commit -m "debug: public demo upgrade ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo-upgrade-debug
+
+      - name: Stop after failed upgrade
+        if: steps.upgrade.outcome == 'failure'
+        run: exit 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build isolated synthetic-data demo
+        id: build
+        continue-on-error: true
+        env:
+          PUBLIC_DEMO_ROOT: ./
+          PUBLIC_DEMO_ROUTER_MODE: hash
+        run: |
+          set +e
+          pnpm build:public-demo > public-demo-build.log 2>&1
+          status=$?
+          cat public-demo-build.log
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Publish failed build log
+        if: steps.build.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/xiangneng-public-demo-debug
+          cp public-demo-build.log /tmp/xiangneng-public-demo-debug/BUILD_LOG.txt
+          cd /tmp/xiangneng-public-demo-debug
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo-debug
+          git add BUILD_LOG.txt
+          git commit -m "debug: public demo build ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo-debug
+
+      - name: Stop after failed build
+        if: steps.build.outcome == 'failure'
+        run: exit 1
+
+      - name: Add static hosting metadata
+        run: |
+          touch apps/sites-demo/dist/client/.nojekyll
+          cp apps/sites-demo/dist/client/index.html apps/sites-demo/dist/client/404.html
+          cat > apps/sites-demo/dist/client/deployment-info.json <<JSON
+          {
+            "sourceCommit": "${GITHUB_SHA}",
+            "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "dataMode": "synthetic-offline-demo"
+          }
+          JSON
+
+      - name: Publish public-demo branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd apps/sites-demo/dist/client
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b public-demo
+          git add -A
+          git commit -m "deploy: public demo ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin public-demo
+
+      - name: Verify public demo URLs
+        run: |
+          verify_url() {
+            url="$1"
+            for attempt in $(seq 1 18); do
+              echo "Checking ${url} (attempt ${attempt}/18)"
+              if curl --fail --silent --show-error --location --max-time 30 "$url" > /tmp/public-demo-page.html \
+                && grep -q "祥能" /tmp/public-demo-page.html; then
+                echo "Verified ${url}"
+                return 0
+              fi
+              sleep 10
+            done
+            echo "Public demo URL did not become healthy: ${url}" >&2
+            return 1
+          }
+
+          verify_url "https://raw.githack.com/slimexa2-wq/xiangneng-hrms/public-demo/index.html"
+          verify_url "https://raw.githack.com/slimexa2-wq/xiangneng-hrms/public-demo/portal/index.html"
