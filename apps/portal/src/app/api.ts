@@ -1,4 +1,5 @@
 import { handlePortalDemoRequest } from './demo';
+import type { Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown) {
@@ -9,7 +10,8 @@ export class ApiError extends Error {
 // 本地演示统一走 Vite 的同源 /api 代理，避免端口/主机名变化导致跨域或旧缓存干扰。
 const coreBase = (import.meta.env.VITE_CORE_API_URL as string | undefined) ?? '/api';
 const tokenKey = 'xiangneng_core_token';
-const demoFallbackEnabled = (import.meta.env.VITE_PORTAL_DEMO_FALLBACK as string | undefined) !== 'false';
+// 演示只能由构建配置显式开启；生产 API 故障不能转为本地“报名成功”。
+export const demoFallbackEnabled = (import.meta.env.VITE_PORTAL_DEMO_FALLBACK as string | undefined) === 'true';
 
 function portalPath(path: string): string {
   return `/portal${path.replace(/^\/api/, '')}`;
@@ -62,4 +64,17 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export function jsonBody(value: unknown): Pick<RequestInit, 'body'> {
   return { body: JSON.stringify(value) };
+}
+
+export async function loginToPortal(username: string, password: string): Promise<Session> {
+  const response = await fetch(`${coreBase}/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  const value = await response.json().catch(() => null);
+  if (!response.ok || !value?.data?.token) {
+    throw new ApiError(response.status, 'LOGIN_FAILED', value?.error?.message ?? '登录失败，请检查账号或网络。');
+  }
+  sessionStorage.setItem(tokenKey, String(value.data.token));
+  return api<Session>('/api/session');
 }

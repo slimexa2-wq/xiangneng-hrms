@@ -102,9 +102,12 @@ type Appeal = {
   reply?: string;
   created_at: string;
 };
+type DemoApplication = { id: string; personId: string; jobId: string; jobTitle: string; projectName: string; status: string; appliedAt: string; interviewAt?: string | null; onboardDate?: string | null; };
 type DemoState = {
   jobs: Job[];
   people: Person[];
+  applications: DemoApplication[];
+  shareTokens: Array<{ token: string; personaId: string; jobId: string; expiresAt: string }>;
   favoriteIds: string[];
   messages: MessageItem[];
   referrals: Referral[];
@@ -113,7 +116,7 @@ type DemoState = {
 };
 
 const source = syntheticSource as unknown as SyntheticData;
-const DEMO_STATE_KEY = 'xiangneng.portal.demo-state.v2';
+const DEMO_STATE_KEY = 'xiangneng.portal.demo-state.v3';
 const DEMO_SESSION_KEY = 'xiangneng.portal.demo-session.v2';
 const CORE_TOKEN_KEY = 'xiangneng_core_token';
 const projectImages = [
@@ -216,7 +219,8 @@ function createInitialJobs(people: Person[]): Job[] {
       projectName: item.projectName,
       companyName: project.branchName,
       title: item.title,
-      type: item.title,
+      type: /仓|物流|分拣/.test(item.title) ? '仓储' : /技|焊|电工/.test(item.title) ? '技术岗' : item.title,
+      salaryText: item.salary,
       salary_min: minimum,
       salary_max: maximum,
       headcount: item.requiredCount,
@@ -251,6 +255,8 @@ function createInitialState(): DemoState {
   return {
     jobs,
     people,
+    applications: people.map((person) => ({ id: `demo-application-${person.id}`, personId: person.id, jobId: person.jobId, jobTitle: person.jobTitle, projectName: person.projectName, status: person.status, appliedAt: person.appliedAt, interviewAt: person.interviewAt, onboardDate: person.onboardDate })),
+    shareTokens: [],
     favoriteIds: [jobs[0]?.id ?? ''],
     messages: [
       { id: 'demo-message-1', type: 'application', title: '报名已进入面试安排', content: '祥能智造示范项目已确认您的报名，面试时间为 7 月 28 日 09:30。', targetPath: '/personal/me/applications', isRead: false, createdAt: '2026-07-26T10:30:00.000Z' },
@@ -963,6 +969,11 @@ export async function handlePortalDemoRequest<T>(path: string, init: RequestInit
   if (method === 'POST' && /^\/api\/jobs\/[^/]+\/apply$/.test(pathname)) {
     const jobId = pathname.split('/')[3];
     const job = state.jobs.find((item) => item.id === jobId);
+    if (!job || job.status !== 'recruiting') throw new Error('岗位已暂停或结束报名');
+    if (!session?.personId) throw new Error('请先登录后报名');
+    if (body.consent === false) throw new Error('请确认报名资料使用授权');
+    if (state.applications.some((item) => item.personId === session.personId && item.jobId === jobId)) return { ok: true } as T;
+    state.applications.unshift({ id: `demo-application-${crypto.randomUUID()}`, personId: session.personId, jobId: job.id, jobTitle: job.title, projectName: job.projectName, status: 'registered', appliedAt: new Date().toISOString() });
     state.messages = [{
       id: `message-${Date.now()}`,
       type: 'application',
@@ -975,6 +986,7 @@ export async function handlePortalDemoRequest<T>(path: string, init: RequestInit
     persist();
     return { ok: true } as T;
   }
+  if (method === 'GET' && pathname === '/api/my-applications') return state.applications.filter((item) => item.personId === session?.personId) as T;
   if (method === 'GET' && pathname === '/api/people') return queryPeople(url, session) as T;
   if (method === 'GET' && /^\/api\/people\/[^/]+$/.test(pathname)) {
     const personId = pathname.split('/').at(-1);
@@ -1019,6 +1031,16 @@ export async function handlePortalDemoRequest<T>(path: string, init: RequestInit
     state.messages = state.messages.map((message) => message.id === messageId ? { ...message, isRead: true } : message);
     persist();
     return { ok: true } as T;
+  }
+  if (method === 'POST' && pathname === '/api/referrals/share-token') {
+    if (!session) throw new Error('请先登录后推荐');
+    const job = state.jobs.find((item) => item.id === body.jobDemandId && item.status === 'recruiting');
+    if (!job) throw new Error('该岗位暂时无法推荐');
+    const token = `demo-only-${crypto.randomUUID()}`;
+    const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    state.shareTokens.push({ token, personaId: session.personaId, jobId: job.id, expiresAt });
+    persist();
+    return { token, expiresAt, jobDemandId: job.id } as T;
   }
   if (method === 'GET' && pathname === '/api/referrals') return state.referrals as T;
   if (method === 'POST' && pathname === '/api/referrals') {

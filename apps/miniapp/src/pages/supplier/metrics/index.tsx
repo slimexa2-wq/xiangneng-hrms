@@ -2,6 +2,7 @@ import { api, type OverviewStatistics } from "../../../api/services";
 import { AccessDenied, AsyncBoundary, MetricGrid, PageShell } from "../../../components/ui";
 import { useAsyncData } from "../../../hooks/useAsyncData";
 import { useSession } from "../../../hooks/useSession";
+import { isSupplierRole } from "../../../domain/roles";
 
 function value(source: OverviewStatistics | null, ...keys: string[]): number | string {
   for (const key of keys) {
@@ -17,7 +18,7 @@ export default function SupplierMetricsPage() {
   const user = useSession();
   const statistics = useAsyncData(() => api.overview(), []);
   if (!user) return <PageShell title="我的数据" />;
-  if (user.role !== "SUPPLIER" || !user.permissions.includes("dashboard:read")) return <AccessDenied />;
+  if (!isSupplierRole(user.role) || !user.permissions.includes("dashboard:read")) return <AccessDenied />;
   const metrics = [
     { label: "今日面试", value: value(statistics.data, "todayInterview"), path: "/pages/supplier/people/index" },
     { label: "面试通过", value: value(statistics.data, "interviewPassed"), path: "/pages/supplier/people/index?interviewStatus=PASSED" },

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, jsonBody } from './api';
+import { api, demoFallbackEnabled, jsonBody, loginToPortal } from './api';
 import { useSession } from './session';
 import type { Session } from './types';
 import { AppShell, type Portal } from '../components/AppShell';
@@ -32,10 +32,22 @@ function portalHome(portal: Portal) {
 
 function EntryRoute() {
   const navigate = useNavigate(); const queryClient = useQueryClient();
+  const { selectSession } = useSession();
   const [searchParams] = useSearchParams();
   const autoSelected = useRef(false);
-  const personas = useQuery({ queryKey: ['personas'], queryFn: () => api<EntryPersona[]>('/api/personas') });
-  const select = useMutation({ mutationFn: (persona: EntryPersona) => api<Session>('/api/session/select-persona', { method: 'POST', ...jsonBody({ personaId: persona.id }) }), onSuccess: async (data) => { await queryClient.invalidateQueries({ queryKey: ['session'] }); const requested = searchParams.get('redirect'); const portal = portalForRole(data.role); const safeRedirect = requested?.startsWith(`/${portal}/`) ? requested : portalHome(portal); navigate(safeRedirect, { replace: Boolean(searchParams.get('persona')) }); } });
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const personas = useQuery({ queryKey: ['personas'], queryFn: () => api<EntryPersona[]>('/api/personas'), enabled: demoFallbackEnabled });
+  const enter = async (data: Session) => {
+    selectSession(data);
+    await queryClient.cancelQueries();
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
+    queryClient.setQueryData(['session'], data);
+    const requested = searchParams.get('redirect');
+    const portal = portalForRole(data.role);
+    navigate(requested?.startsWith(`/${portal}/`) ? requested : portalHome(portal));
+  };
+  const login = useMutation({ mutationFn: () => loginToPortal(credentials.username.trim(), credentials.password), onSuccess: enter });
+  const select = useMutation({ mutationFn: (persona: EntryPersona) => api<Session>('/api/session/select-persona', { method: 'POST', ...jsonBody({ personaId: persona.id }) }), onSuccess: enter });
   useEffect(() => {
     const requestedPersona = searchParams.get('persona');
     if (!requestedPersona || autoSelected.current || !personas.data?.length || select.isPending) return;
@@ -44,13 +56,16 @@ function EntryRoute() {
     autoSelected.current = true;
     select.mutate(persona);
   }, [personas.data, searchParams, select]);
+  if (!demoFallbackEnabled) return <main className="hrms-login"><section><img src="/brand-mark.svg" alt="" /><h1>登录祥能 HRMS</h1><p>好工到招聘 · 四川省内岗位</p><form className="form-grid" onSubmit={(event) => { event.preventDefault(); login.mutate(); }}><Field label="账号" required><input required autoComplete="username" value={credentials.username} onChange={(event) => setCredentials({ ...credentials, username: event.target.value })} /></Field><Field label="密码" required><input required type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></Field>{login.error && <p className="form-error" role="alert">{login.error.message}</p>}<button type="submit" className="primary-button" disabled={login.isPending}>{login.isPending ? '登录中…' : '登录'}</button></form><p className="hrms-login-note">求职者可在微信小程序浏览岗位、报名和查看进度。管理员及合作方使用 HRMS 已有账号。</p></section></main>;
+  if (personas.error) return <main className="entry-page"><EmptyState title="暂时无法打开" detail={personas.error.message} action={<button className="primary-button" onClick={() => void personas.refetch()}>重试</button>} /></main>;
   return <IdentityEntry personas={personas.data ?? []} loading={personas.isLoading || select.isPending} onSelect={(persona) => select.mutate(persona)} />;
 }
 
 function RequirePortal({ portal }: { portal: Portal }) {
   const { session, loading } = useSession();
+  const location = useLocation();
   if (loading) return <LoadingScreen />;
-  if (!session) return <Navigate to="/entry" replace />;
+  if (!session) return <Navigate to={`/entry?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   const actual = portalForRole(session.role);
   if (actual !== portal) return <Navigate to={portalHome(actual)} replace />;
   return <PortalLayout portal={portal} session={session}><Outlet /></PortalLayout>;

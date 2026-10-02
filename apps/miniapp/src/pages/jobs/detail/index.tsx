@@ -8,9 +8,11 @@ import { AccessDenied, AsyncBoundary, FieldRow, PageShell, ProjectGallery, Secti
 import { runtimeConfig } from "../../../config/runtime";
 import { formatDate, projectName } from "../../../domain/format";
 import { jobDetailPath } from "../../../domain/links";
-import { portalForRole } from "../../../domain/roles";
+import { isEmployeeRole, portalForRole } from "../../../domain/roles";
 import { useAsyncData } from "../../../hooks/useAsyncData";
 import { useSession } from "../../../hooks/useSession";
+import { ReferralOfferCard, RecruitmentSalary } from "../../../components/recruitment";
+import { jobCategory, remainingJobs } from "../../../domain/recruitment";
 
 async function loadJob(id: string, authenticated: boolean): Promise<JobDemand> {
   return authenticated ? api.job(id) : api.publicJob(id);
@@ -28,12 +30,12 @@ export default function JobDetailPage() {
   );
 
   Taro.useShareAppMessage(() => ({
-    title: job.data?.title ? `祥能招聘｜${job.data.title}` : "祥能招聘岗位",
+    title: job.data?.title ? `好工到｜${job.data.title} ${job.data.salary}` : "好工到 · 四川招聘",
     path: sharePath ?? jobDetailPath(id, referralToken)
   }));
 
   useEffect(() => {
-    if (!user || user.role !== "EMPLOYEE" || !id || !user.permissions.includes("referral:create")) return;
+    if (!user || !isEmployeeRole(user.role) || !id || !user.permissions.includes("referral:create")) return;
     let cancelled = false;
     void api.createReferralShare(id).then((share) => {
       if (!cancelled) setSharePath(share.path);
@@ -47,7 +49,7 @@ export default function JobDetailPage() {
   const data = job.data;
   const phone = data?.project?.managerPhone ?? null;
   const portal = user ? portalForRole(user.role) : "job-seeker";
-  const applyLabel = portal === "supplier" ? "立即报人" : portal === "employee" ? "推荐报名" : portal === "operator" ? "代为报名" : "在线报名";
+  const applyLabel = portal === "supplier" ? "立即报人" : portal === "employee" ? "推荐报名" : portal === "operator" ? "代为报名" : "立即报名";
   const canApply = !user || user.permissions.includes("application:create") || user.permissions.includes("referral:create");
 
   const copyReferralLink = async () => {
@@ -102,16 +104,16 @@ export default function JobDetailPage() {
       const context = Taro.createCanvasContext("referralPoster");
       context.setFillStyle("#f4f7f9");
       context.fillRect(0, 0, 600, 900);
-      context.setFillStyle("#0f766e");
+      context.setFillStyle("#2563eb");
       context.fillRect(0, 0, 600, 150);
       context.setFillStyle("#ffffff");
       context.setFontSize(42);
-      context.fillText("祥能招聘", 48, 88);
+      context.fillText("好工到 · 四川招聘", 48, 88);
       context.setFillStyle("#12333b");
       context.setFontSize(34);
       context.fillText(data.title.slice(0, 16), 48, 220);
       context.setFontSize(24);
-      context.setFillStyle("#0f766e");
+      context.setFillStyle("#2563eb");
       context.fillText(data.salary || "薪资面议", 48, 270);
       context.setFillStyle("#435b62");
       context.fillText(`项目：${projectName(data).slice(0, 20)}`, 48, 330);
@@ -160,44 +162,46 @@ export default function JobDetailPage() {
   };
 
   return (
-    <PageShell title="岗位详情" subtitle="负责人、项目简介和实拍图只从项目档案读取">
+    <PageShell title="岗位详情" subtitle="工资、工作安排和报名要求" className="recruitment-shell recruitment-detail-shell">
       <AsyncBoundary loading={job.loading} error={job.error} empty={!data} onRetry={() => void job.reload()}>
         {data ? (
           <>
             <SectionCard>
               <View className="card-title-row">
-                <Text className="page-title">{data.title}</Text>
+                <Text className="recruitment-job__title">{data.title}</Text>
                 <StatusTag status={data.status} />
               </View>
-              <Text className="job-card__salary">{data.salary}</Text>
+              <RecruitmentSalary salary={data.salary} />
+              <Text className="recruitment-job__location">{data.workLocation || "工作地点待确认"}</Text>
+              <View className="recruitment-job__tags">{(data.benefits ?? []).map((benefit) => <Text className="recruitment-job__tag" key={benefit}>{benefit}</Text>)}</View>
               <Text className="card-meta">{projectName(data)}</Text>
             </SectionCard>
-            <SectionCard title="项目实拍图">
-              <ProjectGallery images={data.projectImages ?? data.project?.images} />
-            </SectionCard>
-            <SectionCard title="岗位信息">
-              <FieldRow label="需求人数" value={String(data.requiredCount)} />
+            <SectionCard title="工作安排">
+              <FieldRow label="岗位工种" value={jobCategory(data)} />
+              <FieldRow label="招聘人数" value={`还需 ${remainingJobs(data)} 人 / 共招 ${data.requiredCount} 人`} />
               <FieldRow label="工作时间" value={data.workTime} />
               <FieldRow label="工作地点" value={data.workLocation} />
               <FieldRow label="报名截止" value={formatDate(data.deadline)} />
             </SectionCard>
+            <ReferralOfferCard job={data} />
             <SectionCard title="工作内容">
-              <Text className="muted">{data.workContent ?? "按项目安排完成现场生产、质检、包装、物料流转等工作。"}</Text>
+              <Text className="recruitment-body-text">{data.workContent || "工作内容尚未补充，请报名之前向负责人确认。"}</Text>
             </SectionCard>
             <SectionCard title="岗位要求">
-              <Text className="muted">{data.requirements}</Text>
+              <Text className="recruitment-body-text">{data.requirements || "请向岗位负责人确认具体要求。"}</Text>
             </SectionCard>
+            {(data.projectImages ?? data.project?.images)?.length ? <SectionCard title="工作环境实拍"><ProjectGallery images={data.projectImages ?? data.project?.images} /></SectionCard> : null}
             <SectionCard title="项目信息">
-              <FieldRow label="项目简介" value={data.project?.description ?? "提供招聘、入职、在职与离职全流程服务"} />
-              <FieldRow label="归属分子公司" value={data.project?.branch?.name ?? data.project?.branchName ?? "祥能项目运营中心"} />
-              <FieldRow label="项目负责人" value={data.project?.managerName ?? "项目运营负责人"} />
+              <FieldRow label="项目简介" value={data.project?.description || "暂未补充"} />
+              <FieldRow label="归属分子公司" value={data.project?.branch?.name ?? data.project?.branchName ?? "暂未补充"} />
+              <FieldRow label="项目负责人" value={data.project?.managerName || "暂未补充"} />
               <FieldRow label="联系方式" value={phone ?? "暂无"} sensitive />
             </SectionCard>
             <View className="action-row">
-              <Button className="button button--secondary" onClick={() => void contact("call")}>联系负责人</Button>
-              <Button className="button button--secondary" onClick={() => void contact("copy")}>复制联系方式</Button>
+              <Button className="button button--secondary" disabled={!phone} onClick={() => void contact("copy")}>复制联系电话</Button>
+              <Button className="button button--secondary" onClick={() => void Taro.navigateTo({ url: "/pages/policy/index" })}>报名服务说明</Button>
             </View>
-            <Button
+            <View className="recruitment-detail-actions"><Button className="button button--secondary" disabled={!phone} onClick={() => void contact("call")}>{phone ? "电话咨询" : "暂无联系电话"}</Button><Button
               className="button"
               disabled={data.status !== "RECRUITING" || !canApply}
               onClick={() => void Taro.navigateTo({
@@ -205,8 +209,8 @@ export default function JobDetailPage() {
               })}
             >
               {data.status !== "RECRUITING" ? "当前岗位不可报名" : canApply ? applyLabel : "当前账号仅可查看"}
-            </Button>
-            {user?.role === "EMPLOYEE" && user.permissions.includes("referral:create") ? (
+            </Button></View>
+            {user && isEmployeeRole(user.role) && user.permissions.includes("referral:create") ? (
               <View className="action-row">
                 <Button className="button button--secondary" disabled={!sharePath} onClick={() => void copyReferralLink()}>复制推荐链接</Button>
                 <Button className="button button--secondary" openType="share" disabled={!sharePath}>微信转发</Button>

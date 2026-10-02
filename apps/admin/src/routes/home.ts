@@ -9,7 +9,7 @@ export function homePathForPermissions(permissions: readonly Permission[]): stri
   if (has(Permission.SUPPLIER_READ)) return "/suppliers";
   if (has(Permission.POLICY_READ)) return "/policies/supplier";
   if (has(Permission.JOB_READ)) return "/recruitment/demands";
-  if (has(Permission.REWARD_REVIEW)) return "/recruitment/rewards";
+  if (has(Permission.REWARD_READ) || has(Permission.REWARD_REVIEW)) return "/recruitment/rewards";
   if (has(Permission.SALARY_MANAGE)) return "/salary-slips";
   if (has(Permission.IMPORT_MANAGE)) return "/imports";
   if (has(Permission.USER_MANAGE) || has(Permission.AUDIT_READ)) return "/settings";

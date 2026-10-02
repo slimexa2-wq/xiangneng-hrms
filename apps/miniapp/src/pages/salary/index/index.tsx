@@ -3,17 +3,18 @@ import { AccessDenied, AsyncBoundary, FieldRow, PageShell, SectionCard, StatusTa
 import { formatMoney } from "../../../domain/format";
 import { useAsyncData } from "../../../hooks/useAsyncData";
 import { useSession } from "../../../hooks/useSession";
+import { isEmployeeRole } from "../../../domain/roles";
 
 export default function SalarySlipsPage() {
   const user = useSession();
   const salarySlips = useAsyncData(() => api.mySalarySlips(), []);
   if (!user) return <PageShell title="我的工资条" />;
-  if (user.role !== "EMPLOYEE" || !user.permissions.includes("salary:self-read")) {
+  if (!isEmployeeRole(user.role) || !user.permissions.includes("salary:self-read")) {
     return <AccessDenied message="工资条仅允许已绑定人员档案的员工本人查看。" />;
   }
   const items = salarySlips.data ? itemsOf(salarySlips.data) : [];
   return (
-    <PageShell title="我的工资条" subtitle="仅展示当前员工本人已发布的工资条">
+    <PageShell title="我的工资条" subtitle="仅展示本人已发布的工资条" className="recruitment-shell">
       <AsyncBoundary loading={salarySlips.loading} error={salarySlips.error} empty={!items.length} emptyText="暂无已发布工资条" onRetry={() => void salarySlips.reload()}>
         {items.map((slip) => (
           <SectionCard title={slip.salaryMonth} key={slip.id} action={<StatusTag status={slip.status} />}>

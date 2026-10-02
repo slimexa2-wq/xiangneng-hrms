@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { Permission, PolicyType, UserRole, idSchema, policySchema } from "@xiangneng/shared";
-import { andWhere, policyWhere } from "../data-scope.js";
+import { andWhere, policyWhere, projectWhere } from "../data-scope.js";
 import { AppError, notFound } from "../errors.js";
 import { paginationMeta, parsePagination, success } from "../http.js";
 import { getSession } from "../plugins/auth.js";
@@ -41,7 +41,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     const user = getSession(request);
     const { page, pageSize, skip } = parsePagination(query);
     let scope = policyWhere(user);
-    if (user.role === UserRole.SUPPLIER) {
+    if (user.role === UserRole.SUPPLIER || user.role === UserRole.SUPPLIER_ADMIN) {
       const supplier = user.supplierId
         ? await app.prisma.supplier.findUnique({ where: { id: user.supplierId }, select: { level: true } })
         : null;
@@ -54,7 +54,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
           ...(supplier?.level ? [{ supplierId: null, supplierLevel: supplier.level }] : [])
         ]
       };
-    } else if (user.role === UserRole.EMPLOYEE) {
+    } else if (user.role === UserRole.EMPLOYEE || user.role === UserRole.OUTSOURCED_EMPLOYEE) {
       const account = await app.prisma.user.findUnique({ where: { id: user.id }, select: { employeeType: true } });
       scope = {
         type: PolicyType.EMPLOYEE_REFERRAL,
@@ -89,6 +89,9 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const input = policySchema.parse(request.body);
     validatePolicy(input);
+    const user = getSession(request);
+    const project = await app.prisma.project.findFirst({ where: andWhere(projectWhere(user), { id: input.projectId }), select: { id: true } });
+    if (!project) notFound("项目");
     const policy = await app.prisma.policy.create({ data: input });
     await writeAudit(app.prisma, request, {
       action: "POLICY_CREATE",
@@ -104,7 +107,8 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   }, async (request) => {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const patch = policySchema.partial().parse(request.body);
-    const existing = await app.prisma.policy.findUnique({ where: { id } });
+    const user = getSession(request);
+    const existing = await app.prisma.policy.findFirst({ where: andWhere(policyWhere(user), { id }) });
     if (!existing) notFound("政策");
     const merged = policySchema.parse({
       ...existing,
@@ -112,6 +116,8 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
       amount: patch.amount ?? existing.amount.toNumber()
     });
     validatePolicy(merged);
+    const project = await app.prisma.project.findFirst({ where: andWhere(projectWhere(user), { id: merged.projectId }), select: { id: true } });
+    if (!project) notFound("项目");
     const policy = await app.prisma.policy.update({
       where: { id },
       data: { ...patch, version: { increment: 1 } }

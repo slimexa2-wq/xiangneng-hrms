@@ -49,6 +49,7 @@ export function statusLabel(status?: string | null): string {
     ABANDONED: "放弃",
     PENDING: "待达成",
     ACHIEVED: "已达成",
+    APPROVED: "已审核，待发放",
     PAID: "已发放",
     CANCELLED: "已取消",
     PUBLISHED: "已发布",

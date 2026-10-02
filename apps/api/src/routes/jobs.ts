@@ -17,6 +17,7 @@ import { paginationMeta, parsePagination, success } from "../http.js";
 import { getSession } from "../plugins/auth.js";
 import { writeAudit } from "../audit.js";
 import { attachRecruitmentProgress as attachProgress } from "../services/recruitment-progress.js";
+import { jobCategoryTerms, publicReferralOffer } from "../services/job-offer.js";
 
 const jobQuerySchema = z.object({
   page: z.coerce.number().optional(),
@@ -24,11 +25,31 @@ const jobQuerySchema = z.object({
   projectId: idSchema.optional(),
   branchId: idSchema.optional(),
   status: z.nativeEnum(JobStatus).optional(),
-  keyword: z.string().trim().max(120).optional()
+  keyword: z.string().trim().max(120).optional(),
+  city: z.string().trim().max(64).optional(),
+  category: z.string().trim().max(64).optional()
 });
 
+function jobFilters(query: z.infer<typeof jobQuerySchema>): Prisma.JobDemandWhereInput {
+  const conditions: Prisma.JobDemandWhereInput[] = [];
+  if (query.keyword) conditions.push({ OR: [
+    { title: { contains: query.keyword, mode: "insensitive" } },
+    { workLocation: { contains: query.keyword, mode: "insensitive" } },
+    { project: { name: { contains: query.keyword, mode: "insensitive" } } }
+  ] });
+  if (query.city) conditions.push({ OR: [
+    { city: { contains: query.city } }, { workLocation: { contains: query.city } },
+    { project: { branch: { name: { contains: query.city } } } }
+  ] });
+  if (query.category) conditions.push({ OR: jobCategoryTerms(query.category).flatMap((term) => [
+    { category: { contains: term } }, { title: { contains: term } },
+    { project: { businessType: { contains: term } } }
+  ]) });
+  return conditions.length ? { AND: conditions } : {};
+}
+
 function jobScope(user: ReturnType<typeof getSession>): Prisma.JobDemandWhereInput {
-  if (user.role === UserRole.EMPLOYEE || user.role === UserRole.JOB_SEEKER) {
+  if (user.role === UserRole.EMPLOYEE || user.role === UserRole.OUTSOURCED_EMPLOYEE || user.role === UserRole.JOB_SEEKER) {
     return { status: JobStatus.RECRUITING, deadline: { gte: new Date() } };
   }
   return { project: projectWhere(user) };
@@ -106,6 +127,7 @@ const jobInclude = {
 };
 
 type BoundPolicy = {
+  isActive?: boolean;
   supplierId: string | null;
   supplierLevel: string | null;
   employeeType: string | null;
@@ -114,7 +136,7 @@ type BoundPolicy = {
 };
 
 function policyEffective(policy: BoundPolicy | null, now = new Date()): boolean {
-  return Boolean(policy && policy.effectiveAt <= now && (!policy.expiresAt || policy.expiresAt >= now));
+  return Boolean(policy && policy.isActive !== false && policy.effectiveAt <= now && (!policy.expiresAt || policy.expiresAt.getTime() + 86_400_000 > now.getTime()));
 }
 
 function hidePolicies<T extends { supplierPolicy: BoundPolicy | null; referralPolicy: BoundPolicy | null; project: { managerPhone: string | null } }>(
@@ -125,19 +147,19 @@ function hidePolicies<T extends { supplierPolicy: BoundPolicy | null; referralPo
 ) {
   const role = user.role;
   const project = { ...job.project, managerPhone: job.project.managerPhone };
-  if (role === UserRole.JOB_SEEKER) return { ...job, project, supplierPolicy: undefined, referralPolicy: undefined };
-  if (role === UserRole.EMPLOYEE) {
+  if (role === UserRole.JOB_SEEKER) return { ...job, project, supplierPolicy: undefined, referralPolicy: undefined, referralOffer: publicReferralOffer(job.referralPolicy) };
+  if (role === UserRole.EMPLOYEE || role === UserRole.OUTSOURCED_EMPLOYEE) {
     const applicable = policyEffective(job.referralPolicy) && job.referralPolicy?.employeeType === audience.employeeType;
-    return { ...job, project, supplierPolicy: undefined, referralPolicy: applicable ? job.referralPolicy : undefined };
+    return { ...job, project, supplierPolicy: undefined, referralPolicy: applicable ? job.referralPolicy : undefined, referralOffer: applicable ? publicReferralOffer(job.referralPolicy) : null };
   }
-  if (role === UserRole.SUPPLIER) {
+  if (role === UserRole.SUPPLIER || role === UserRole.SUPPLIER_ADMIN) {
     const applicable = policyEffective(job.supplierPolicy) && (
       job.supplierPolicy?.supplierId === user.supplierId ||
       (!job.supplierPolicy?.supplierId && job.supplierPolicy?.supplierLevel === audience.supplierLevel)
     );
-    return { ...job, project, referralPolicy: undefined, supplierPolicy: applicable ? job.supplierPolicy : undefined };
+    return { ...job, project, referralPolicy: undefined, supplierPolicy: applicable ? job.supplierPolicy : undefined, referralOffer: publicReferralOffer(job.referralPolicy) };
   }
-  return { ...job, project };
+  return { ...job, project, referralOffer: publicReferralOffer(job.referralPolicy) };
 }
 
 function publicJob<T extends {
@@ -161,6 +183,10 @@ function publicJob<T extends {
     ...job,
     supplierPolicy: undefined,
     referralPolicy: undefined,
+    supplierPolicyId: undefined,
+    referralPolicyId: undefined,
+    createdById: undefined,
+    referralOffer: publicReferralOffer(job.referralPolicy),
     project: {
       ...job.project,
       images: job.project.images.map(({ storageKey: _storageKey, ...image }) => ({
@@ -176,13 +202,12 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.get("/public/job-demands", async (request) => {
     const query = jobQuerySchema.parse(request.query);
     const { page, pageSize, skip } = parsePagination(query);
-    const where = {
+    const where = andWhere({
       projectId: query.projectId,
       project: query.branchId ? { branchId: query.branchId } : undefined,
       status: JobStatus.RECRUITING,
       deadline: { gte: new Date() },
-      title: query.keyword ? { contains: query.keyword, mode: "insensitive" as const } : undefined
-    };
+    }, jobFilters(query));
     const [jobs, total] = await app.prisma.$transaction([
       app.prisma.jobDemand.findMany({ where, include: jobInclude, orderBy: { deadline: "asc" }, skip, take: pageSize }),
       app.prisma.jobDemand.count({ where })
@@ -215,8 +240,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       projectId: query.projectId,
       project: query.branchId ? { branchId: query.branchId } : undefined,
       status: query.status,
-      title: query.keyword ? { contains: query.keyword, mode: "insensitive" as const } : undefined
-    });
+    }, jobFilters(query));
     const [jobs, total] = await app.prisma.$transaction([
       app.prisma.jobDemand.findMany({ where, include: jobInclude, orderBy: [{ status: "asc" }, { deadline: "asc" }], skip, take: pageSize }),
       app.prisma.jobDemand.count({ where })

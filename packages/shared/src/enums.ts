@@ -91,6 +91,7 @@ export type ApplicationSource =
 export const RewardStatus = {
   PENDING: "PENDING",
   ACHIEVED: "ACHIEVED",
+  APPROVED: "APPROVED",
   PAID: "PAID",
   CANCELLED: "CANCELLED"
 } as const;
@@ -170,5 +171,12 @@ export const labels = {
     [JobStatus.PAUSED]: "暂停招聘",
     [JobStatus.FILLED]: "已招满",
     [JobStatus.ENDED]: "已结束"
+  },
+  rewardStatus: {
+    [RewardStatus.PENDING]: "待达成",
+    [RewardStatus.ACHIEVED]: "待财务审核",
+    [RewardStatus.APPROVED]: "待发放",
+    [RewardStatus.PAID]: "已发放",
+    [RewardStatus.CANCELLED]: "已取消"
   }
 } as const;

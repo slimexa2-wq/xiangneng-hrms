@@ -11,10 +11,11 @@ export function PageShell({
   title,
   subtitle,
   children,
-  showConfigGap = false
-}: PropsWithChildren<{ title: string; subtitle?: string; showConfigGap?: boolean }>) {
+  showConfigGap = false,
+  className = ""
+}: PropsWithChildren<{ title: string; subtitle?: string; showConfigGap?: boolean; className?: string }>) {
   return (
-    <View className="page-shell">
+    <View className={`page-shell ${className}`}>
       <View className="page-heading">
         <Text className="page-title">{title}</Text>
         {subtitle ? <Text className="page-subtitle">{subtitle}</Text> : null}
@@ -87,7 +88,7 @@ export function AsyncBoundary({
 }>) {
   if (loading) return <StatePanel title="正在加载" description="请稍候…" />;
   if (error) return <StatePanel title="加载失败" description={error} actionText="重试" onAction={onRetry} />;
-  if (empty) return <StatePanel title={emptyText} description="数据缺失时保持为空，不填入示例数据。" />;
+  if (empty) return <StatePanel title={emptyText} description="暂时还没有记录，请稍后查看。" />;
   return <>{children}</>;
 }
 

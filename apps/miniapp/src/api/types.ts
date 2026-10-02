@@ -1,4 +1,14 @@
 export type UserRole =
+  | "SUPER_ADMIN"
+  | "GROUP_LEADER"
+  | "DEPARTMENT_MANAGER"
+  | "INTERNAL_HR"
+  | "RECRUITER"
+  | "FINANCE_REVIEWER"
+  | "CASHIER"
+  | "DEPARTMENT_REIMBURSEMENT_CLERK"
+  | "SUPPLIER_ADMIN"
+  | "OUTSOURCED_EMPLOYEE"
   | "HEADQUARTERS_MANAGER"
   | "BRANCH_MANAGER"
   | "PROJECT_OPERATOR"
@@ -69,6 +79,16 @@ export type JobDemand = {
   salary: string;
   workTime: string;
   workLocation: string;
+  city?: string | null;
+  category?: string | null;
+  benefits?: string[];
+  referralOffer?: {
+    amount: string;
+    retentionDays: number;
+    achievementConditions: string;
+    exclusionConditions: string | null;
+    employeeType: string | null;
+  } | null;
   deadline: string;
   status: "RECRUITING" | "PAUSED" | "FILLED" | "ENDED";
   projectImages?: ProjectImage[];
@@ -106,6 +126,11 @@ export type Application = {
   phone?: string;
   jobDemand?: JobDemand;
   status?: string;
+  employmentStatus?: string;
+  interviewStatus?: string;
+  interviewDate?: string | null;
+  onboardDate?: string | null;
+  offboardDate?: string | null;
   createdAt?: string;
   appliedAt?: string;
 };
@@ -128,10 +153,19 @@ export type Referral = {
   maskedPhone?: string;
   person?: Person;
   jobDemand?: JobDemand;
+  application?: Application | null;
   status?: string;
   onboardDate?: string | null;
   rewardAmount?: number;
   rewardStatus?: string;
+  policySnapshot?: {
+    name?: string;
+    amount?: number | string;
+    retentionDays?: number;
+    achievementConditions?: string;
+    exclusionConditions?: string | null;
+  } | null;
+  eligibility?: RewardEligibility;
   reward?: {
     id: string;
     amount: number | string;
@@ -141,7 +175,8 @@ export type Referral = {
   } | null;
   createdAt?: string;
 };
-export type Reward = { id: string; referral?: Referral; amount: number | string; status: string; achievedAt?: string | null; paidAt?: string | null };
+export type RewardEligibility = { eligible: boolean; retentionDays: number | null; eligibleAt: string | null; reason: string };
+export type Reward = { id: string; referral?: Referral; amount: number | string; status: string; achievedAt?: string | null; paidAt?: string | null; eligibility?: RewardEligibility };
 export type SalarySlip = {
   id: string;
   salaryMonth: string;
@@ -232,6 +267,7 @@ export type RegistrationInput = {
   recommenderUserId?: string | null;
   recommenderName?: string | null;
   notes?: string | null;
+  consent?: boolean;
 };
 
 export type DemoMessage = {

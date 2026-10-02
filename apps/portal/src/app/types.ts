@@ -41,6 +41,10 @@ export interface Job {
   imageUrl: string;
   appliedCount: number;
   completedCount: number;
+  salaryText?: string;
+  referral_reward?: number;
+  referral_retention_days?: number;
+  referral_exclusions?: string;
 }
 
 export interface Person {

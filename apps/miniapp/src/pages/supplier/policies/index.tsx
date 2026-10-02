@@ -4,12 +4,13 @@ import { AccessDenied, AsyncBoundary, FieldRow, PageShell, SectionCard } from ".
 import { formatDate, formatMoney, projectName } from "../../../domain/format";
 import { useAsyncData } from "../../../hooks/useAsyncData";
 import { useSession } from "../../../hooks/useSession";
+import { isSupplierRole } from "../../../domain/roles";
 
 export default function SupplierPoliciesPage() {
   const user = useSession();
   const policies = useAsyncData(() => api.policies({ type: "SUPPLIER", isActive: "true" }), []);
   if (!user) return <PageShell title="我的政策" />;
-  if (user.role !== "SUPPLIER" || !user.permissions.includes("policy:read")) {
+  if (!isSupplierRole(user.role) || !user.permissions.includes("policy:read")) {
     return <AccessDenied message="仅供应商本人可查看按供应商或级别匹配的政策。" />;
   }
   return (

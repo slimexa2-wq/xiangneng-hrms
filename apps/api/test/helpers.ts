@@ -94,6 +94,7 @@ export function createPrismaMock(overrides: DelegateOverrides = {}): PrismaClien
         };
       }
       if (name === "$queryRaw") return async () => [{ "?column?": 1 }];
+      if (name === "$executeRaw") return async () => 0;
       if (name === "$disconnect") return async () => undefined;
       return defaultDelegate(name);
     }

@@ -40,8 +40,8 @@ export default function LoginPage() {
   const wechatLogin = async () => {
     if (!runtimeConfig.wechatConfigured) {
       await Taro.showModal({
-        title: "微信配置尚未完成",
-        content: "当前没有真实 AppID/AppSecret 和合法域名，不能执行微信登录。请先使用开发账号。",
+        title: "微信登录暂未开通",
+        content: "请先使用账号登录。如果还没有账号，可以先浏览岗位并提交报名。",
         showCancel: false
       });
       return;
@@ -64,13 +64,13 @@ export default function LoginPage() {
   };
 
   return (
-    <PageShell title="祥能人事招聘" subtitle="人员、招聘、供应商、推荐与工资条统一入口" showConfigGap>
-      <SectionCard title="开发账号登录">
+    <PageShell title="登录" subtitle="查看本人记录和员工服务" className="recruitment-shell recruitment-form-shell">
+      <SectionCard title="账号登录">
         <FormField label="账号" required>
-          <TextField value={username} placeholder="请输入测试账号" onChange={setUsername} />
+          <TextField value={username} placeholder="请输入账号" onChange={setUsername} />
         </FormField>
         <FormField label="密码" required>
-          <TextField value={password} placeholder="请输入密码" onChange={setPassword} />
+          <TextField value={password} placeholder="请输入密码" onChange={setPassword} password />
         </FormField>
         <Button className="button" loading={submitting} disabled={submitting} onClick={() => void passwordLogin()}>
           登录
@@ -83,7 +83,7 @@ export default function LoginPage() {
         暂不登录，浏览招聘岗位
       </Button>
       <View className="spacer" />
-      <Text className="muted">系统不内置虚构账号。测试账号由后台种子生成并在项目交付说明中统一维护。</Text>
+      <Text className="muted">求职可以先浏览岗位。登录后，按账号身份查看本人记录或进入对应工作台。</Text>
     </PageShell>
   );
 }

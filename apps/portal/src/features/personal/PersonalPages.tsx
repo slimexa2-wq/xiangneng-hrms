@@ -1,92 +1,79 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, Bookmark, BriefcaseBusiness, CalendarClock, Check, ChevronRight, CircleDollarSign,
+  Bell, Bookmark, BriefcaseBusiness, Boxes, Factory, PackageCheck, Wrench, CalendarClock, Check, ChevronRight, CircleDollarSign,
   Clock3, FileText, Gift, Headphones, HelpCircle, MapPin, MessageSquareText, Phone,
   Send, Settings, Share2, ShieldCheck, Star, UserRound, UsersRound, WalletCards
 } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, jsonBody } from '../../app/api';
 import { formatSalaryRange } from '../../app/format';
+import { hasJobPreference, isRecruiting, jobBenefits, jobSalary, recruitmentCities, referralRewardLabel } from '../../app/recruitment';
+import { ApplyDialog } from './ApplyDialog';
 import type { Job, MessageItem, Person, Session } from '../../app/types';
 import { Avatar } from '../../components/Avatar';
-import { DetailLine, JobCard } from '../../components/DataCards';
+import { DetailLine, JobCard, SalaryLabel } from '../../components/DataCards';
 import { StatusTag } from '../../components/StatusTag';
 import { Card, EmptyState, Field, FilterSelect, LoadingScreen, Modal, PageHeader, SearchInput } from '../../components/Ui';
 
 interface Catalog { projects: Array<{ id: string; name: string; region: string }>; }
+
+const jobCategories = [
+  { label: '全部岗位', value: '', icon: BriefcaseBusiness },
+  { label: '工厂普工', value: '操作工', icon: Factory },
+  { label: '仓储物流', value: '仓储', icon: Boxes },
+  { label: '质检包装', value: '质检', icon: PackageCheck },
+  { label: '技能岗位', value: '技术岗', icon: Wrench }
+];
 
 export function PersonalHome({ session }: { session: Session }) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState('');
   const [region, setRegion] = useState('');
   const [salary, setSalary] = useState('');
+  const [benefit, setBenefit] = useState('');
   const [applyJob, setApplyJob] = useState<Job | null>(null);
-  const queryClient = useQueryClient();
   const params = new URLSearchParams();
-  if (query) params.set('query', query);
+  if (query.trim()) params.set('query', query.trim());
   if (type) params.set('jobType', type);
   if (region) params.set('region', region);
   if (salary) params.set('salary', salary);
   const jobs = useQuery({ queryKey: ['jobs', query, type, region, salary], queryFn: () => api<Job[]>(`/api/jobs?${params}`) });
-  const apply = useMutation({
-    mutationFn: (jobId: string) => api(`/api/jobs/${jobId}/apply`, { method: 'POST' }),
-    onSuccess: async () => { setApplyJob(null); await queryClient.invalidateQueries({ queryKey: ['messages'] }); }
-  });
-
-  return <>
-    <section className="recruit-banner">
-      <div><span>2026 夏季招聘</span><h1>祥能未来计划</h1><p>寻找发光的你</p></div>
-      <div className="banner-people"><UsersRound /><i /><i /></div>
-    </section>
-    <SearchInput value={query} onChange={setQuery} placeholder="搜索岗位、项目或工作地点" />
-    <div className="filter-row">
-      <FilterSelect label="岗位类型" value={type} onChange={setType} options={[{ label: '操作工', value: '操作工' }, { label: '质检', value: '质检' }, { label: '技术岗', value: '技术岗' }, { label: '仓储', value: '仓储' }]} />
-      <FilterSelect label="区域" value={region} onChange={setRegion} options={[{ label: '宜宾市', value: '四川省宜宾市' }, { label: '泸州市', value: '四川省泸州市' }, { label: '成都市', value: '四川省成都市' }, { label: '绵阳市', value: '四川省绵阳市' }]} />
-      <FilterSelect label="薪资范围" value={salary} onChange={setSalary} options={[{ label: '4–6K', value: '4000-6000' }, { label: '6–8K', value: '6000-8000' }, { label: '8K以上', value: '8000-' }]} />
-    </div>
-    <div className="row row--between"><h2 className="section-title">热门岗位</h2><span className="small muted">共 {jobs.data?.length ?? 0} 个岗位</span></div>
-    {jobs.isLoading ? <LoadingScreen /> : jobs.data?.length ? <div className="job-list">{jobs.data.map((job) => <JobCard key={job.id} job={job} onApply={setApplyJob} />)}</div> : <EmptyState title="没有匹配岗位" detail="调整搜索或筛选条件后再试试" />}
-    <Modal open={Boolean(applyJob)} title="确认报名" onClose={() => setApplyJob(null)} footer={<><button className="ghost-button" type="button" onClick={() => setApplyJob(null)}>暂不报名</button><button className="primary-button" type="button" disabled={apply.isPending} onClick={() => applyJob && apply.mutate(applyJob.id)}>{apply.isPending ? '提交中…' : '确认报名'}</button></>}>
-      {apply.isSuccess ? <div className="success-state"><Check /><strong>报名成功</strong><p>后续面试和入职进度会通过消息中心通知。</p></div> : <div className="confirm-job"><BriefcaseBusiness /><div><strong>{applyJob?.title}</strong><p>{applyJob?.projectName} · {applyJob?.region}</p></div>{apply.error && <p className="form-error">{apply.error.message}</p>}</div>}
-    </Modal>
-  </>;
+  const items = (jobs.data ?? []).filter((job) => !benefit || hasJobPreference(job, benefit));
+  const activeFilters = Boolean(query || type || region || salary || benefit);
+  return <div className="recruit-home">
+    <div className="recruit-page-title"><div><h1>找工作</h1><p className="recruit-region-caption">成都 · 宜宾 · 绵阳</p></div><Link className="recruit-my-application" to="/personal/me/applications"><FileText size={20} />我的报名</Link></div>
+    <SearchInput value={query} onChange={setQuery} placeholder="搜索岗位、公司或工作地点" />
+    <div className="recruit-city-tabs" aria-label="工作城市">{recruitmentCities.map((city) => <button key={city.label} type="button" aria-pressed={region === city.value} className={region === city.value ? 'active' : ''} onClick={() => setRegion(city.value)}>{city.label}</button>)}</div>
+    <div className="recruit-categories" aria-label="工种">{jobCategories.map((category) => <button key={category.label} type="button" aria-pressed={type === category.value} className={type === category.value ? 'active' : ''} onClick={() => setType(category.value)}><span>{category.label}</span></button>)}</div>
+    <div className="recruit-benefit-filters">{['包吃', '包住', '长白班'].map((value) => <button key={value} type="button" aria-pressed={benefit === value} className={benefit === value ? 'active' : ''} onClick={() => setBenefit(benefit === value ? '' : value)}>{value}</button>)}<FilterSelect label="工资范围" value={salary} onChange={setSalary} options={[{ label: '4000–6000元', value: '4000-6000' }, { label: '6000–8000元', value: '6000-8000' }, { label: '8000元以上', value: '8000-' }]} /></div>
+    <div className="recruit-workspace"><section className="recruit-results"><div className="recruit-result-heading"><h2>{region ? `${recruitmentCities.find((city) => city.value === region)?.label}岗位` : '正在招聘'}</h2><span>共 {items.length} 个岗位</span>{activeFilters && <button className="text-button" type="button" onClick={() => { setQuery(''); setType(''); setRegion(''); setSalary(''); setBenefit(''); }}>清空筛选</button>}</div>
+      {jobs.isLoading ? <LoadingScreen /> : jobs.error ? <EmptyState title="岗位暂时没加载出来" detail="网络可能不稳定，请重试。已填写的信息不会丢失。" action={<button className="primary-button" onClick={() => void jobs.refetch()}>重新加载</button>} /> : items.length ? <div className="job-list">{items.map((job) => <JobCard key={job.id} job={job} onApply={setApplyJob} />)}</div> : <EmptyState title="暂时没有合适的岗位" detail="换个城市、工种，或清空筛选看看。" action={<button className="secondary-button" onClick={() => { setQuery(''); setType(''); setSalary(''); setBenefit(''); }}>放宽筛选</button>} />}
+    </section></div>
+    <ApplyDialog job={applyJob} onClose={() => setApplyJob(null)} />
+  </div>;
 }
 
 export function PersonalJobDetail() {
   const { id = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
   const job = useQuery({ queryKey: ['job', id], queryFn: () => api<Job>(`/api/jobs/${id}`) });
   const favorites = useQuery({ queryKey: ['favorites'], queryFn: () => api<Job[]>('/api/favorites') });
   const favorite = useMutation({ mutationFn: () => api<{ favorite: boolean }>(`/api/favorites/${id}`, { method: 'PUT' }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorites'] }) });
-  const apply = useMutation({ mutationFn: () => api(`/api/jobs/${id}/apply`, { method: 'POST' }), onSuccess: () => setConfirmOpen(false) });
   if (job.isLoading) return <LoadingScreen />;
-  if (!job.data) return <EmptyState title="岗位不存在" detail="该岗位可能已关闭或删除" />;
+  if (!job.data) return <EmptyState title="岗位暂时无法查看" detail={job.error?.message ?? '该岗位可能已结束，请返回查看其他岗位。'} action={<Link className="secondary-button" to="/personal/home">找其他工作</Link>} />;
   const item = job.data;
-  return <div className="detail-page-with-bar">
-    <PageHeader title="岗位详情" back action={<button className={`icon-button ${favorites.data?.some((saved) => saved.id === id) ? 'is-saved' : ''}`} type="button" aria-label="收藏岗位" onClick={() => favorite.mutate()}><Star size={20} fill={favorites.data?.some((saved) => saved.id === id) ? 'currentColor' : 'none'} /></button>} />
-    <div className={`job-hero job-thumb--${item.imageKey}`} style={{ backgroundImage: `linear-gradient(180deg, rgba(7,34,76,.03), rgba(7,34,76,.72)), url(${item.imageUrl})` }}><div><span>{item.projectName}</span><strong>{item.title}</strong></div><span>项目实景</span></div>
-    <Card className="job-detail-card">
-      <div className="job-detail-title"><div><h1>{item.title}</h1><p>{item.projectName}</p></div><strong>{formatSalaryRange(item.salary_min, item.salary_max)}</strong></div>
-      <div className="tag-cloud"><span>包住</span><span>{item.work_time.split(' ')[0]}</span><span>{item.type}</span><span>提供宿舍</span></div>
-    </Card>
-    <Card className="detail-section">
-      <DetailLine icon="map" label="工作地点" value={item.address} />
-      <DetailLine icon="users" label="招聘人数" value={`${item.headcount}人`} />
-      <DetailLine icon="time" label="工作时间" value={item.work_time} />
-      <DetailLine label="报名截止" value={item.deadline} />
-    </Card>
-    <Card className="detail-section rich-detail">
-      <h2>项目介绍</h2><p>{item.projectDescription}</p>
-      <h2>岗位要求</h2><p>{item.requirements}</p>
-      <h2>岗位职责</h2><p>{item.duties}</p>
-      <h2>福利待遇</h2><p>{item.benefits}</p>
-      <h2>推荐政策</h2><p>{item.referral_policy}</p>
-      <h2>项目负责人</h2><p>{item.managerName} · {item.managerPhone}</p>
-    </Card>
-    <div className="fixed-action-bar"><a className="secondary-button" href={`tel:${item.managerPhone}`}><Phone size={16} />联系负责人</a><button className="primary-button" type="button" onClick={() => setConfirmOpen(true)}>立即报名</button><button className="secondary-button" type="button" onClick={() => navigator.share?.({ title: `${item.projectName} · ${item.title}`, text: formatSalaryRange(item.salary_min, item.salary_max, false), url: location.href })}><Share2 size={16} />转发推荐</button></div>
-    <Modal open={confirmOpen} title="报名确认" onClose={() => setConfirmOpen(false)} footer={<button className="primary-button" type="button" disabled={apply.isPending} onClick={() => apply.mutate()}>{apply.isPending ? '提交中…' : '确认报名'}</button>}><p>确认报名“{item.projectName} · {item.title}”吗？</p>{apply.error && <p className="form-error">{apply.error.message}</p>}</Modal>
+  return <div className="detail-page-with-bar recruit-detail">
+    <PageHeader title="岗位详情" back action={<button className={`icon-button ${favorites.data?.some((saved) => saved.id === id) ? 'is-saved' : ''}`} type="button" aria-label="收藏岗位" onClick={() => favorite.mutate()} disabled={favorite.isPending}><Star size={20} fill={favorites.data?.some((saved) => saved.id === id) ? 'currentColor' : 'none'} /></button>} />
+    <Card className="job-detail-card"><div className="row row--between"><h1>{item.title}</h1><StatusTag status={item.status} /></div><SalaryLabel job={item} /><p className="bluecollar-company">{item.projectName}</p><div className="bluecollar-benefits">{jobBenefits(item).map((value) => <span key={value}>{value}</span>)}</div>{favorite.error && <p className="form-error" role="alert">{favorite.error.message}</p>}</Card>
+    <Card className="detail-section"><DetailLine icon="map" label="工作地点" value={item.address || item.region || '请咨询负责人'} /><DetailLine icon="users" label="招聘人数" value={`${item.headcount} 人`} /><DetailLine icon="time" label="工作时间" value={item.work_time || '请咨询负责人'} /><DetailLine label="报名截止" value={item.deadline || '请咨询负责人'} /><DetailLine label="所属公司" value={item.companyName || '请咨询负责人确认签约主体'} /></Card>
+    <Card className="detail-section rich-detail"><h2>工资待遇</h2><p>{jobSalary(item)}</p><p>实际收入、加班费、结算日期及扣费项目，请在入职前与招聘负责人确认。</p><h2>岗位要求</h2><p>{item.requirements || '暂无补充要求，请联系负责人。'}</p><h2>工作内容</h2><p>{item.duties || item.projectDescription || '暂无补充说明，请联系负责人。'}</p><h2>吃住与福利</h2><p>{item.benefits || '尚未填写，请向负责人确认。'}</p></Card>
+    <Card className="recruit-detail-referral"><Gift /><div><h2>推荐奖励</h2><p>{item.referral_policy || '当前岗位尚未公布推荐奖励政策。'}</p>{item.referral_retention_days && <p>需在职满 {item.referral_retention_days} 天，按报名时的政策审核。</p>}</div></Card>
+    <Card className="detail-section rich-detail"><h2>招聘负责人</h2><p>{item.managerName || '请联系项目运营'}{item.managerPhone ? ` · ${item.managerPhone}` : ''}</p><p className="recruit-safe-note">求职报名免费，请核实工作地点、签约单位及具体工资待遇。</p></Card>
+    <div className="fixed-action-bar">{item.managerPhone ? <a className="secondary-button" href={`tel:${item.managerPhone}`}><Phone size={18} />电话咨询</a> : <span className="recruit-contact-unavailable">联系电话待补充</span>}<button className="primary-button" type="button" disabled={!isRecruiting(item)} onClick={() => setConfirmOpen(true)}>{isRecruiting(item) ? '立即报名' : '暂停报名'}</button><Link className="secondary-button" to="/personal/referrals"><Share2 size={18} />推荐好友</Link></div>
+    <ApplyDialog job={confirmOpen ? item : null} referralToken={searchParams.get('ref') ?? undefined} onClose={() => setConfirmOpen(false)} />
   </div>;
 }
 
@@ -107,30 +94,30 @@ export function MessagesPage({ portal = 'personal' }: { portal?: 'personal' | 's
   </>;
 }
 
-interface Referral { id: string; name: string; phone: string; projectName: string; jobTitle: string; status: string; reward: number; rewardStatus: string; createdAt: string; onboardDate?: string; }
+interface Referral { id: string; name: string; phone: string; projectName: string; jobTitle: string; status: string; reward: number; rewardStatus: string; createdAt: string; onboardDate?: string; retentionDays?: number; eligibleAt?: string; }
 
 export function ReferralPage({ session }: { session: Session }) {
-  const [open, setOpen] = useState(false); const [rulesOpen, setRulesOpen] = useState(false);
-  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [jobId, setJobId] = useState('');
+  const [copied, setCopied] = useState(false);
   const referrals = useQuery({ queryKey: ['referrals'], queryFn: () => api<Referral[]>('/api/referrals') });
   const jobs = useQuery({ queryKey: ['jobs', 'referral'], queryFn: () => api<Job[]>('/api/jobs?status=recruiting') });
-  const create = useMutation({ mutationFn: (data: Record<string, string>) => api('/api/referrals', { method: 'POST', ...jsonBody(data) }), onSuccess: async () => { setOpen(false); await queryClient.invalidateQueries({ queryKey: ['referrals'] }); } });
-  const earned = referrals.data?.filter((item) => item.rewardStatus === 'earned').reduce((sum, item) => sum + item.reward, 0) ?? 0;
-  return <>
-    <PageHeader title="推荐" action={<button type="button" className="text-button" onClick={() => setRulesOpen(true)}>推荐规则</button>} />
-    <section className="referral-banner"><div><h1>推荐好友来祥能入职<br />赚丰厚奖励</h1><button className="banner-button" type="button" onClick={() => setOpen(true)}>去推荐</button></div><Gift /></section>
-    <div className="referral-stats"><div><strong>{referrals.data?.length ?? 0}</strong><span>已推荐(人)</span></div><div><strong>{referrals.data?.filter((item) => item.status === 'employed').length ?? 0}</strong><span>已入职(人)</span></div><div><strong>¥{earned.toLocaleString()}</strong><span>已获奖励(元)</span></div></div>
-    <div className="row row--between"><h2 className="section-title">推荐记录</h2><span className="small muted">全部 <ChevronRight size={13} /></span></div>
-    {referrals.isLoading ? <LoadingScreen /> : referrals.data?.length ? <div className="referral-list">{referrals.data.map((item) => <Card className="referral-row" key={item.id}><Avatar name={item.name} /><div><div><strong>{item.name}</strong><span>{item.phone}</span><StatusTag status={item.status} /></div><p>推荐岗位：{item.jobTitle}</p><p>推荐时间：{item.createdAt.slice(0,10)}　入职时间：{item.onboardDate ?? '—'}</p></div></Card>)}</div> : <EmptyState title="还没有推荐记录" detail="推荐好友入职可获得对应政策奖励" action={<button className="primary-button" type="button" onClick={() => setOpen(true)}>立即推荐</button>} />}
-    <ReferralForm open={open} onClose={() => setOpen(false)} jobs={jobs.data ?? []} submitting={create.isPending} error={create.error?.message} onSubmit={(data) => create.mutate(data)} />
-    <Modal open={rulesOpen} title="推荐规则" onClose={() => setRulesOpen(false)}><Card className="rich-detail"><h2>{session.personStatus === 'employed' ? '内部员工推荐政策' : '社会推荐政策'}</h2><p>{session.personStatus === 'employed' ? (jobs.data?.[0]?.referral_policy ?? '推荐人员入职满30天后按岗位政策发放奖励。') : '被推荐人达到岗位政策规定的在职条件后，推荐奖励进入待发放状态。'}</p><h2>奖励进度</h2><p>报名、面试、入职与奖励发放状态会在推荐记录中同步更新。</p></Card></Modal>
-  </>;
-}
-
-function ReferralForm({ open, onClose, jobs, onSubmit, submitting, error }: { open: boolean; onClose: () => void; jobs: Job[]; onSubmit: (data: Record<string, string>) => void; submitting: boolean; error?: string | undefined }) {
-  const [form, setForm] = useState({ name: '', phone: '', idCard: '', jobId: '' });
-  const submit = (event: FormEvent) => { event.preventDefault(); onSubmit(form); };
-  return <Modal open={open} title="填写被推荐人信息" onClose={onClose} footer={<button type="submit" form="referral-form" className="primary-button" disabled={submitting}>{submitting ? '提交中…' : '提交推荐'}</button>}><form id="referral-form" className="form-grid" onSubmit={submit}><Field label="姓名" required><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="请输入真实姓名" /></Field><Field label="手机号" required><input required inputMode="tel" pattern="1\d{10}" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="请输入11位手机号" /></Field><Field label="身份证号"><input value={form.idCard} onChange={(event) => setForm({ ...form, idCard: event.target.value })} placeholder="可稍后由运营补充" /></Field><Field label="推荐岗位" required><select required value={form.jobId} onChange={(event) => setForm({ ...form, jobId: event.target.value })}><option value="">请选择岗位</option>{jobs.map((job) => <option value={job.id} key={job.id}>{job.projectName} · {job.title}</option>)}</select></Field>{error && <p className="form-error">{error}</p>}</form></Modal>;
+  const share = useMutation({ mutationFn: () => api<{ token: string; expiresAt: string }>('/api/referrals/share-token', { method: 'POST', ...jsonBody({ jobDemandId: jobId }) }) });
+  const selected = jobs.data?.find((job) => job.id === jobId);
+  const link = share.data ? `${location.origin}${import.meta.env.VITE_ROUTER_BASENAME || ''}/personal/jobs/${encodeURIComponent(jobId)}?ref=${encodeURIComponent(share.data.token)}` : '';
+  const paid = referrals.data?.filter((item) => item.rewardStatus === 'paid').reduce((sum, item) => sum + item.reward, 0) ?? 0;
+  const awaitingPayment = referrals.data?.filter((item) => item.rewardStatus === 'approved').reduce((sum, item) => sum + item.reward, 0) ?? 0;
+  return <div className="recruit-referral-page">
+    <PageHeader title="推荐有奖" />
+    <section className="referral-banner"><div><h1>好工作，分享给工友</h1><p>好友通过你的邀请报名，入职达标后按政策审核奖励。</p><button className="primary-button" type="button" onClick={() => { share.reset(); setCopied(false); setOpen(true); }}>选择岗位，邀请好友</button></div><Gift /></section>
+    <div className="referral-stats"><div><strong>{referrals.data?.length ?? 0}</strong><span>已推荐人数</span></div><div><strong>¥{awaitingPayment.toLocaleString()}</strong><span>已批准，待发放</span></div><div><strong>¥{paid.toLocaleString()}</strong><span>已发放奖励</span></div></div>
+    <Card className="recruit-rules"><h2>奖励怎么领</h2><ol><li>选择岗位，把专属邀请链接发给好友，由好友自主填写报名资料。</li><li>好友入职并达到该岗位规定的在职天数与其他条件后，工作人员核验并审批。</li><li>审批通过后由财务登记发放凭证；仅奖励直接推荐，重复报名不重复计奖。</li></ol></Card>
+    <div className="recruit-result-heading"><h2>我的推荐记录</h2><span>{referrals.data?.length ?? 0} 条</span></div>
+    {referrals.isLoading ? <LoadingScreen /> : referrals.error ? <EmptyState title="推荐记录暂时无法读取" detail={referrals.error.message} action={<button className="secondary-button" onClick={() => void referrals.refetch()}>重试</button>} /> : referrals.data?.length ? <div className="referral-list">{referrals.data.map((item) => <Card className="referral-row" key={item.id}><Avatar name={item.name} /><div><div><strong>{item.name}</strong><StatusTag status={item.status} /></div><p>{item.projectName} · {item.jobTitle}</p><p>报名 {item.createdAt.slice(0, 10)} · 入职 {item.onboardDate ?? '等待入职'}</p><div className="referral-reward-progress"><span>{referralRewardLabel(item.rewardStatus)}</span><b>政策奖励 ¥{item.reward.toLocaleString()}</b></div>{item.retentionDays && <p>需在职满 {item.retentionDays} 天{item.eligibleAt ? ` · 预计达标 ${item.eligibleAt.slice(0, 10)}` : ''}</p>}</div></Card>)}</div> : <EmptyState title="还没有推荐记录" detail="先选一个合适的岗位，分享给有需要的工友。" />}
+    <Modal open={open} title="邀请好友来报名" onClose={() => { if (!share.isPending) setOpen(false); }} footer={link ? <button className="primary-button" onClick={async () => { try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); } }}>{copied ? '已复制，去发给好友' : '复制邀请链接'}</button> : <button className="primary-button" disabled={!jobId || share.isPending} onClick={() => share.mutate()}>{share.isPending ? '正在生成…' : '生成专属邀请'}</button>}>
+      <div className="form-grid"><Field label="推荐岗位" required><select value={jobId} disabled={share.isPending || Boolean(link)} onChange={(event) => { setJobId(event.target.value); share.reset(); setCopied(false); }}><option value="">请选择好友感兴趣的岗位</option>{jobs.data?.map((job) => <option value={job.id} key={job.id}>{job.region.replace('四川省', '')} · {job.title}</option>)}</select></Field>{selected && <div className="apply-profile"><strong>{selected.projectName}</strong><span className="bluecollar-salary">{jobSalary(selected)}</span><span>{selected.referral_policy || '请先向负责人确认该岗位的推荐政策。'}</span></div>}{link && <><Field label="专属邀请链接"><input readOnly value={link} onFocus={(event) => event.target.select()} /></Field><p className="recruit-safe-note">复制后发给好友；也可以选中链接手动复制。邀请有效期至 {new Date(share.data!.expiresAt).toLocaleString('zh-CN')}。</p></>}{jobs.error && <p className="form-error" role="alert">{jobs.error.message}</p>}{share.error && <p className="form-error" role="alert">{share.error.message}</p>}</div>
+    </Modal>
+  </div>;
 }
 
 const allFunctions = [
@@ -147,13 +134,15 @@ export function PersonalMe({ session }: { session: Session }) {
   return <>
     <section className="profile-hero"><div className="profile-actions"><Link to="/personal/me/help" aria-label="帮助中心"><Headphones size={19} /></Link><Link to="/personal/me/settings" aria-label="设置"><Settings size={19} /></Link></div><div><Avatar name={session.name} size={62} /><div><h1>{session.name}<StatusTag status={session.personStatus ?? 'registered'} label={isEmployee ? '已入职员工' : '求职者'} /></h1><p>{person?.phone ?? '正在读取人员档案…'}</p></div></div></section>
     <Card className="function-panel"><h2>常用功能</h2><div className="function-grid">{allFunctions.filter((item) => !item.employeeOnly || isEmployee).map((item) => <Link key={item.label} to={item.path.startsWith('/') ? item.path : `/personal/me/${item.path}`}><span><item.icon /></span><strong>{item.label}</strong></Link>)}</div></Card>
-    <Card className="menu-list"><h2>其他服务</h2><Link to="profile"><UserRound />个人资料<ChevronRight /></Link><Link to="help"><HelpCircle />帮助中心<ChevronRight /></Link><a href="tel:08318881234"><Headphones />联系客服<ChevronRight /></a><Link to="settings"><Settings />设置<ChevronRight /></Link></Card>
+    <Card className="menu-list"><h2>其他服务</h2><Link to="profile"><UserRound />个人资料<ChevronRight /></Link><Link to="help"><HelpCircle />帮助中心<ChevronRight /></Link><Link to="help"><Headphones />求职咨询<ChevronRight /></Link><Link to="settings"><Settings />设置<ChevronRight /></Link></Card>
   </>;
 }
 
+interface PersonalApplication { id: string; jobId: string; jobTitle: string; projectName: string; status: string; appliedAt: string; interviewAt?: string | null; onboardDate?: string | null; }
+
 export function ApplicationsPage({ session }: { session: Session }) {
-  const people = useQuery({ queryKey: ['my-person'], queryFn: () => api<Person[]>('/api/people') });
-  return <><PageHeader title="我的报名" back />{people.isLoading ? <LoadingScreen /> : people.data?.map((person) => <Card className="application-card" key={person.id}><div className="row row--between"><div><h2>{person.projectName}</h2><p>{person.jobTitle}</p></div><StatusTag status={person.status} /></div><div className="progress-steps">{['已报名','已到场','面试','待入职','已入职'].map((label, index) => <span className={index <= ['registered','arrived','interview_passed','pending_onboard','employed'].indexOf(person.status) ? 'done' : ''} key={label}><i>{index + 1}</i>{label}</span>)}</div><DetailLine label="报名时间" value={person.appliedAt.slice(0,10)} /><DetailLine label="面试时间" value={person.interviewAt ? new Date(person.interviewAt).toLocaleString('zh-CN') : '待通知'} /></Card>)}</>;
+  const applications = useQuery({ queryKey: ['my-applications'], queryFn: () => api<PersonalApplication[]>('/api/my-applications') });
+  return <><PageHeader title="我的报名" back />{applications.isLoading ? <LoadingScreen /> : applications.error ? <EmptyState title="报名记录暂时没加载出来" detail={applications.error.message} action={<button className="secondary-button" onClick={() => void applications.refetch()}>重新加载</button>} /> : applications.data?.length ? applications.data.map((application) => <Card className="application-card" key={application.id}><div className="row row--between"><div><h2>{application.jobTitle}</h2><p>{application.projectName}</p></div><StatusTag status={application.status} /></div><div className="progress-steps">{['已报名', '已到场', '面试通过', '待入职', '已入职'].map((label, index) => <span className={index <= ['registered', 'arrived', 'interview_passed', 'pending_onboard', 'employed'].indexOf(application.status) ? 'done' : ''} key={label}><i>{index + 1}</i>{label}</span>)}</div><DetailLine label="报名时间" value={new Date(application.appliedAt).toLocaleDateString('zh-CN')} /><DetailLine label="面试时间" value={application.interviewAt ? new Date(application.interviewAt).toLocaleString('zh-CN') : '等待负责人安排'} />{application.onboardDate && <DetailLine label="入职日期" value={application.onboardDate.slice(0, 10)} />}<Link className="secondary-button full-button" to={`/personal/jobs/${application.jobId}`}>查看岗位和联系方式</Link></Card>) : <EmptyState title="还没有报名记录" detail="找到合适岗位后，点“立即报名”即可。" action={<Link className="primary-button" to="/personal/home">去找工作</Link>} />}</>;
 }
 
 export function FavoritesPage() {
@@ -161,14 +150,7 @@ export function FavoritesPage() {
   const queryClient = useQueryClient();
   const favorites = useQuery({ queryKey: ['favorites'], queryFn: () => api<Job[]>('/api/favorites') });
   const remove = useMutation({ mutationFn: (id: string) => api(`/api/favorites/${id}`, { method: 'PUT' }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorites'] }) });
-  const apply = useMutation({
-    mutationFn: (jobId: string) => api(`/api/jobs/${jobId}/apply`, { method: 'POST' }),
-    onSuccess: async () => {
-      setApplyJob(null);
-      await queryClient.invalidateQueries({ queryKey: ['my-person'] });
-    }
-  });
-  return <><PageHeader title="收藏岗位" back />{favorites.isLoading ? <LoadingScreen /> : favorites.data?.length ? <div className="job-list">{favorites.data.map((job) => <div className="favorite-job" key={job.id}><JobCard job={job} onApply={setApplyJob} /><button type="button" className="favorite-remove" onClick={() => remove.mutate(job.id)}><Bookmark size={14} fill="currentColor" />取消收藏</button></div>)}</div> : <EmptyState title="暂无收藏岗位" detail="在岗位详情点击星标，方便稍后查看" action={<Link className="primary-button" to="/personal/home">去看看岗位</Link>} />}<Modal open={Boolean(applyJob)} title="确认报名" onClose={() => setApplyJob(null)} footer={<><button className="ghost-button" type="button" onClick={() => setApplyJob(null)}>取消</button><button className="primary-button" type="button" disabled={apply.isPending} onClick={() => applyJob && apply.mutate(applyJob.id)}>{apply.isPending ? '提交中…' : '确认报名'}</button></>}><p>确认报名“{applyJob?.projectName} · {applyJob?.title}”吗？</p>{apply.error && <p className="form-error">{apply.error.message}</p>}</Modal></>;
+  return <><PageHeader title="收藏岗位" back />{favorites.isLoading ? <LoadingScreen /> : favorites.error ? <EmptyState title="收藏暂时无法读取" detail={favorites.error.message} /> : favorites.data?.length ? <div className="job-list">{favorites.data.map((job) => <div className="favorite-job" key={job.id}><JobCard job={job} onApply={setApplyJob} /><button className="text-button" type="button" disabled={remove.isPending} onClick={() => remove.mutate(job.id)}><Bookmark size={15} />取消收藏</button></div>)}</div> : <EmptyState title="还没有收藏岗位" detail="在岗位详情点击收藏，下次更容易找到。" />}<ApplyDialog job={applyJob} onClose={() => setApplyJob(null)} /></>;
 }
 
 interface Payroll { id: string; month: string; gross: number; net: number; details: Record<string, number>; publishedAt: string; }
@@ -222,7 +204,7 @@ export function GenericPersonalPage({ title }: { title: string }) {
   const details: Array<[string, string]> = page === 'profile'
     ? [['姓名', person?.name ?? '正在读取'], ['手机号', person?.phone ?? '正在读取'], ['身份证号', person?.idCard ?? '正在读取'], ['员工编号', person?.employeeNo ?? '未生成'], ['当前项目', person?.projectName ?? '正在读取'], ['岗位', person?.jobTitle ?? '正在读取']]
     : page === 'settings'
-      ? [['消息通知', '已开启'], ['信息展示', '权限范围内展示完整业务信息'], ['数据同步', '后台、小程序与AI助手实时联动'], ['当前版本', '1.1.0 参赛演示版']]
-      : [['招聘咨询', '0831-8881234'], ['员工服务', '工作日 09:00–18:00'], ['申诉处理', '提交后可在申诉记录查看进度'], ['数据说明', '仅展示当前账号权限范围内的业务数据']];
-  return <><PageHeader title={pageTitle} back /><Card className="detail-section">{details.map(([label, value]) => <DetailLine key={label} label={label} value={value} />)}</Card>{page === 'help' && <a className="primary-button full-button" href="tel:08318881234"><Phone size={16} />联系运营人员</a>}</>;
+      ? [['消息通知', '已开启'], ['信息展示', '权限范围内展示完整业务信息'], ['数据同步', '后台、小程序与AI助手实时联动'], ['当前版本', '好工到 · HRMS 招聘模块']]
+      : [['招聘咨询', '在岗位详情查看负责人联系方式'], ['申诉处理', '提交后可在申诉记录查看进度'], ['数据说明', '仅展示当前账号权限范围内的业务数据']];
+  return <><PageHeader title={pageTitle} back /><Card className="detail-section">{details.map(([label, value]) => <DetailLine key={label} label={label} value={value} />)}</Card>{page === 'help' && <Link className="primary-button full-button" to="/personal/home"><BriefcaseBusiness size={18} />查看岗位联系方式</Link>}</>;
 }

@@ -1,6 +1,5 @@
 export default defineAppConfig({
   pages: [
-    "pages/demo/index",
     "pages/index/index",
     "pages/login/index",
     "pages/operator/register/index",
@@ -20,14 +19,16 @@ export default defineAppConfig({
     "pages/referrals/mine/index",
     "pages/referrals/rewards/index",
     "pages/salary/index/index",
-    "pages/profile/index/index"
+    "pages/profile/index/index",
+    "pages/policy/index",
+    "pages/demo/index"
   ],
   window: {
     backgroundTextStyle: "light",
-    navigationBarBackgroundColor: "#1268f3",
+    navigationBarBackgroundColor: "#f5f5f7",
     navigationBarTitleText: "祥能人事招聘",
-    navigationBarTextStyle: "white",
-    backgroundColor: "#f3f7ff"
+    navigationBarTextStyle: "black",
+    backgroundColor: "#f5f5f7"
   },
   lazyCodeLoading: "requiredComponents"
 });

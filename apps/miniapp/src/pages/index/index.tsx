@@ -7,6 +7,7 @@ import { menuForUser, portalForRole, roleLabels } from "../../domain/roles";
 import { jobDetailPath, referralTokenFromParams } from "../../domain/links";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { useSession } from "../../hooks/useSession";
+import { RecruitmentHome } from "../../components/recruitment-home";
 
 function stat(source: OverviewStatistics | null, ...keys: string[]): number | string {
   for (const key of keys) {
@@ -39,18 +40,7 @@ export default function HomePage() {
       .catch(() => Taro.showToast({ title: "推荐链接已失效", icon: "none" }));
   }, [referralToken]);
 
-  if (!user) {
-    return (
-      <PageShell title="祥能招聘" subtitle="查看真实开放岗位，报名信息进入统一人员档案">
-        <SectionCard title="求职者入口">
-          <Text className="muted">无需登录即可浏览开放岗位和提交首次报名；已有档案需完成身份绑定后继续办理。</Text>
-          <View className="spacer" />
-          <Button className="button" onClick={() => void Taro.navigateTo({ url: "/pages/jobs/index/index" })}>浏览招聘岗位</Button>
-          <Button className="button button--secondary" onClick={() => void Taro.navigateTo({ url: "/pages/login/index" })}>账号或微信登录</Button>
-        </SectionCard>
-      </PageShell>
-    );
-  }
+  if (!user || user.role === "JOB_SEEKER") return <RecruitmentHome user={user} />;
   const portal = portalForRole(user.role);
   const metrics =
     portal === "operator"

@@ -9,6 +9,7 @@ export type MenuItem = {
 };
 
 const operatorRoles: readonly UserRole[] = [
+  "SUPER_ADMIN", "GROUP_LEADER", "DEPARTMENT_MANAGER", "INTERNAL_HR", "RECRUITER", "FINANCE_REVIEWER", "CASHIER", "DEPARTMENT_REIMBURSEMENT_CLERK",
   "HEADQUARTERS_MANAGER",
   "BRANCH_MANAGER",
   "PROJECT_OPERATOR",
@@ -17,6 +18,16 @@ const operatorRoles: readonly UserRole[] = [
 ];
 
 export const roleLabels: Record<UserRole, string> = {
+  SUPER_ADMIN: "超级管理员",
+  GROUP_LEADER: "集团管理者",
+  DEPARTMENT_MANAGER: "部门负责人",
+  INTERNAL_HR: "内部人事",
+  RECRUITER: "招聘人员",
+  FINANCE_REVIEWER: "财务审核",
+  CASHIER: "出纳",
+  DEPARTMENT_REIMBURSEMENT_CLERK: "部门报销人员",
+  SUPPLIER_ADMIN: "供应商管理员",
+  OUTSOURCED_EMPLOYEE: "外包员工",
   HEADQUARTERS_MANAGER: "总部管理者",
   BRANCH_MANAGER: "分子公司负责人",
   PROJECT_OPERATOR: "项目运营人员",
@@ -28,10 +39,18 @@ export const roleLabels: Record<UserRole, string> = {
 };
 
 export function portalForRole(role: UserRole): Portal {
-  if (role === "SUPPLIER") return "supplier";
-  if (role === "EMPLOYEE") return "employee";
+  if (isSupplierRole(role)) return "supplier";
+  if (isEmployeeRole(role)) return "employee";
   if (role === "JOB_SEEKER") return "job-seeker";
   return "operator";
+}
+
+export function isEmployeeRole(role?: UserRole): boolean {
+  return role === "EMPLOYEE" || role === "OUTSOURCED_EMPLOYEE";
+}
+
+export function isSupplierRole(role?: UserRole): boolean {
+  return role === "SUPPLIER" || role === "SUPPLIER_ADMIN";
 }
 
 export function isOperatorRole(role: UserRole): boolean {

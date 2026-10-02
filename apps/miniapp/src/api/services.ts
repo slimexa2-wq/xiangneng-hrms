@@ -71,7 +71,7 @@ export const api = {
     apiRequest<Person>(`/people/${encodeURIComponent(id)}/notes`, { method: "PATCH", data: { notes } }),
   uploadPersonFile: (id: string, filePath: string, originalName: string) =>
     uploadFile<PersonFile>(`/people/${encodeURIComponent(id)}/files`, filePath, originalName),
-  createApplication: (input: RegistrationInput) =>
+  createApplication: (input: RegistrationInput & { referralToken?: string }) =>
     apiRequest<{ application: Application; person: Person; deduplicated: boolean } | Application>("/applications", {
       method: "POST",
       data: input

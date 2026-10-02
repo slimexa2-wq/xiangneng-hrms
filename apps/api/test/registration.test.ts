@@ -58,6 +58,7 @@ function registrationStore() {
     referralPolicy: null
   };
   const tx: Record<string, unknown> = {
+    $executeRaw: async () => 0,
     jobDemand: { findUnique: async () => job },
     project: { findFirst: async () => ({ id: projectId }) },
     supplier: { findUnique: async () => ({ id: supplierId, isActive: true }) },
@@ -122,6 +123,10 @@ function registrationStore() {
       }
     },
     referralRecord: {
+      findUnique: async (raw: unknown) => {
+        const key = (raw as { where: { personId_jobDemandId: { personId: string; jobDemandId: string } } }).where.personId_jobDemandId;
+        return referrals.find((item) => item.personId === key.personId && item.jobDemandId === key.jobDemandId) ?? null;
+      },
       upsert: async (raw: unknown) => {
         const input = raw as { where: { applicationId: string }; create: Record<string, unknown> };
         const existing = referrals.find((item) => item.applicationId === input.where.applicationId);
@@ -139,7 +144,7 @@ function registrationStore() {
     ...tx,
     $transaction: async (callback: (client: unknown) => unknown) => callback(tx)
   } as unknown as PrismaClient;
-  return { prisma, people, applications, referrals, tx };
+  return { prisma, people, applications, referrals, tx, job };
 }
 
 const baseInput: PersonRegistrationInput = {
@@ -153,6 +158,56 @@ const baseInput: PersonRegistrationInput = {
 };
 
 describe("统一人员档案与报名来源", () => {
+  it("同人同岗绑定首位推荐人，重复报名不创建第二次奖励或允许抢推荐", async () => {
+    const store = registrationStore();
+    const first = session({ role: UserRole.EMPLOYEE, id: "60000000-0000-4000-8000-000000000003" });
+    const second = session({ role: UserRole.EMPLOYEE, id: "60000000-0000-4000-8000-000000000004" });
+    await registerPerson(store.prisma, testConfig, request(first), baseInput, first);
+    await registerPerson(store.prisma, testConfig, request(first), baseInput, first);
+    await expect(registerPerson(store.prisma, testConfig, request(second), baseInput, second))
+      .rejects.toMatchObject({ code: "REFERRER_ALREADY_BOUND", statusCode: 409 });
+    expect(store.applications).toHaveLength(1);
+    expect(store.referrals).toHaveLength(1);
+    expect(store.referrals[0]?.recommenderUserId).toBe(first.id);
+  });
+
+  it("身份证关联本人或内部员工时禁止自荐", async () => {
+    const store = registrationStore();
+    const employee = session({ role: UserRole.EMPLOYEE });
+    (store.tx.user as { findUnique: () => unknown }).findUnique = async () => ({
+      id: employee.id, isActive: true, employeeType: "普通员工", internalEmployee: { idCard: baseInput.idCard }
+    });
+    await expect(registerPerson(store.prisma, testConfig, request(employee), baseInput, employee))
+      .rejects.toMatchObject({ code: "SELF_REFERRAL_NOT_ALLOWED", statusCode: 409 });
+    expect(store.people).toHaveLength(0);
+  });
+
+  it("报名时冻结奖励金额与满期天数，政策变更不覆盖原始快照", async () => {
+    const store = registrationStore();
+    const employee = session({ role: UserRole.EMPLOYEE });
+    const policy = {
+      id: "80000000-0000-4000-8000-000000000001", name: "在岗推荐", version: 1,
+      type: "EMPLOYEE_REFERRAL", amount: 600, retentionDays: 30, isActive: true, employeeType: "普通员工",
+      achievementConditions: "在岗满30天后审核", exclusionConditions: "自荐不计奖",
+      effectiveAt: new Date("2020-01-01"), expiresAt: null
+    };
+    Object.assign(store.job, { referralPolicy: policy });
+    await registerPerson(store.prisma, testConfig, request(employee), baseInput, employee);
+    Object.assign(policy, { amount: 900, retentionDays: 60, version: 2 });
+    await registerPerson(store.prisma, testConfig, request(employee), baseInput, employee);
+    expect(store.referrals).toHaveLength(1);
+    expect(store.referrals[0]?.policySnapshot).toMatchObject({ amount: "600", retentionDays: 30, version: 1 });
+  });
+
+  it("员工本人自主报名保留SELF来源，不触发自荐奖励", async () => {
+    const store = registrationStore();
+    const operator = session({});
+    await registerPerson(store.prisma, testConfig, request(operator), baseInput, operator);
+    const employee = session({ role: UserRole.EMPLOYEE, personId: store.people[0]!.id as string });
+    await registerPerson(store.prisma, testConfig, request(employee), { ...baseInput, source: ApplicationSource.SELF }, employee);
+    expect(store.applications[1]?.source).toBe(ApplicationSource.SELF);
+    expect(store.referrals).toHaveLength(0);
+  });
   it("运营、供应商、员工推荐三入口只建立一份人员主档并保留三条来源报名", async () => {
     const store = registrationStore();
     const operator = session({});
