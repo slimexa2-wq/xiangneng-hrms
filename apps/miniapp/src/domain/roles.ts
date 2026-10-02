@@ -77,7 +77,8 @@ const menus: Record<Portal, MenuItem[]> = {
     { title: "我的信息", description: "账号与微信配置状态", path: "/pages/profile/index/index" }
   ],
   employee: [
-    { title: "招聘岗位", description: "查看可推荐岗位", path: "/pages/jobs/index/index", permission: "job:read" },
+    { title: "招聘岗位", description: "本人找工作，查看工作安排", path: "/pages/jobs/index/index", permission: "job:read" },
+    { title: "我的报名", description: "查看本人的报名和面试进度", path: "/pages/application/mine/index", permission: "application:create" },
     { title: "内部推荐", description: "推荐报名并自动绑定本人", path: "/pages/referrals/index/index", permission: "referral:create" },
     { title: "我的推荐", description: "查看被推荐人完整进度", path: "/pages/referrals/mine/index", permission: "referral:create" },
     { title: "推荐奖励", description: "查看待达成、已达成与已发放", path: "/pages/referrals/rewards/index", permission: "referral:create" },

@@ -8,6 +8,7 @@ export interface Session {
   supplierId?: string;
   personId?: string;
   personStatus?: string;
+  permissions?: string[];
 }
 
 export interface Job {

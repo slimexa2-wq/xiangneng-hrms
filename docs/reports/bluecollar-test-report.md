@@ -32,9 +32,35 @@
 
 只读迁移预检命令 `pnpm --filter @xiangneng/api db:recruitment-preflight` 在专用 QA 库实际执行成功，退出码 0，结果 `readOnly=true`、`ready=true`、重复推荐数 0、缺少留存天数快照的待处理奖励数 0。预检实现只执行 SELECT，不修改记录。
 
+## 首次微信求职者报名补充验证
+
+新增独立 `candidate-onboarding.integration.test.ts`，没有更改原有招聘奖励测试文件。针对首次微信账号、本人档案绑定及安全衔接已有 HRMS 账号的修复，**11 个补充真实数据库场景全部通过**，最终运行耗时 8.18 秒。
+
+微信 `jscode2session` 上游使用隔离的 `fetch` stub：只接受预设的合成 code 与 OpenID，拒绝任何其他网络请求。因此以下结论验证服务端接收微信验证结果后的账号与数据库行为，不代表已经验证实际微信 AppID 或真机登录。账号、本人档案、报名、推荐关系、奖励快照、数据库锁和事务均使用真实 PostgreSQL。
+
+| 补充场景 | 实测结果 |
+| --- | --- |
+| 上游凭证校验失败或返回无效 JSON 时，拒绝登录且不创建账号 | 通过 |
+| 同一陌生 OpenID 并发登录只创建一个 `JOB_SEEKER`，仅授予岗位读取及报名权限 | 通过 |
+| 已停用微信账号返回 401，不重新激活、不改写原角色、不产生第二个账号 | 通过 |
+| 无人员或权限范围的空临时微信账号安全衔接已登录 HRMS 员工，原临时 JWT 失效，双方审计落库，员工角色不变 | 通过 |
+| 已有本人档案的微信账号不能转移，返回 409，双方绑定、角色、token 版本和报名完整保留 | 通过 |
+| 首次 SELF 报名同事务创建全新本人档案、绑定账号并创建报名；当前 token 即可查询本人记录 | 通过 |
+| 首次携带推荐 token 的报名同事务绑定候选人、真实推荐人及原始奖励规则快照 | 通过 |
+| 陌生账号提交已有身份证返回 403，账号不绑旧档案，原始档案与报名不被覆盖 | 通过 |
+| 同账号并发提交不同身份证，仅成功一份；失败事务不留下孤立人员或报名 | 通过 |
+| 不同账号并发提交同一全新身份证，仅一个账号成功绑定，另一个保持未绑定 | 通过 |
+| 未绑定本人档案的账号读不到他人报名、推荐奖励及后台管理列表 | 通过 |
+
+微信上游 `session_key` 不出现在登录响应与存储的账号字段中；新账号没有分公司、供应商、项目绑定或管理角色授权。
+
+临时账号安全衔接保留旧账号记录，清空其微信关联、停用并增加 token 版本，不删除历史记录。微信身份已关联本人档案或权限范围时，必须人工核实，不自动夺取绑定。
+
 ## 可复现方式
 
 测试位于 `tests/bluecollar/recruitment.integration.test.ts`，使用独立 `tests/bluecollar/vitest.config.ts`。测试明确拒绝普通应用 `DATABASE_URL`，仅接受 `BLUECOLLAR_QA_DATABASE_URL`，并强制检查地址为 `127.0.0.1:55432/xiangneng_bluecollar_qa`，以降低误用正式数据库的风险。
+
+首次微信账号流程使用独立 `candidate-onboarding.vitest.config.ts`，沿用相同数据库地址检查，可以单独运行而不重复招聘奖励测试。
 
 从仓库根目录执行。先创建专用数据库容器；如果该容器已经存在并正在运行，直接执行迁移与测试即可。
 
@@ -57,6 +83,10 @@ pnpm --filter @xiangneng/api db:generate
 BLUECOLLAR_QA_DATABASE_URL='postgresql://qa:bluecollar-local-test-only@127.0.0.1:55432/xiangneng_bluecollar_qa?schema=public' \
   pnpm --filter @xiangneng/api exec vitest run \
   --config ../../tests/bluecollar/vitest.config.ts
+
+BLUECOLLAR_QA_DATABASE_URL='postgresql://qa:bluecollar-local-test-only@127.0.0.1:55432/xiangneng_bluecollar_qa?schema=public' \
+  pnpm --filter @xiangneng/api exec vitest run \
+  --config ../../tests/bluecollar/candidate-onboarding.vitest.config.ts
 
 bash tests/bluecollar/migration-upgrade-check.sh
 

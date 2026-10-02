@@ -75,6 +75,14 @@ export async function registerPerson(
     // Serialize registrations for the same identity, including concurrent public
     // requests, so referral attribution and the person master cannot race.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${idCard}))`;
+    let currentPersonId = user?.personId ?? null;
+    if (user?.role === UserRole.JOB_SEEKER) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"registration-user:" + user.id}))`;
+      const account = await tx.user.findUnique({ where: { id: user.id }, select: { id: true, isActive: true, personId: true, role: true } });
+      if (!account?.isActive) throw new AppError(401, "ACCOUNT_DISABLED", "该账号已停用，请联系服务人员核实");
+      if (account.role !== UserRole.JOB_SEEKER) throw new AppError(409, "ACCOUNT_STATE_CHANGED", "账号身份已变化，请刷新登录后继续");
+      currentPersonId = account.personId;
+    }
     const job = bound.jobDemandId
       ? await tx.jobDemand.findUnique({
           where: { id: bound.jobDemandId },
@@ -122,8 +130,10 @@ export async function registerPerson(
       throw new AppError(409, "REFERRER_ALREADY_BOUND", "该人员在此岗位已绑定推荐人，不能重复计奖或更换推荐人");
     }
     const preserveExistingPublicProfile = !user && Boolean(existing);
-    if (user?.role === UserRole.JOB_SEEKER && (!user.personId || existing?.id !== user.personId)) {
-      throw new AppError(403, "PERSON_IDENTITY_MISMATCH", "求职者账号只能使用本人已绑定的人员身份报名");
+    const firstSelfProfile = user?.role === UserRole.JOB_SEEKER && !currentPersonId && !existing && Boolean(job)
+      && (bound.source === ApplicationSource.SELF || Boolean(trustedReferralUserId));
+    if (user?.role === UserRole.JOB_SEEKER && !firstSelfProfile && (!currentPersonId || existing?.id !== currentPersonId)) {
+      throw new AppError(403, "PERSON_IDENTITY_MISMATCH", "已有人员档案需要服务人员核实绑定，不能凭身份证直接认领或报名他人身份");
     }
     if (bound.source === ApplicationSource.SELF && user
       && (user.role === UserRole.EMPLOYEE || user.role === UserRole.OUTSOURCED_EMPLOYEE)
@@ -182,6 +192,16 @@ export async function registerPerson(
             notes: bound.notes
           }
         });
+
+    if (firstSelfProfile && user) {
+      const binding = await tx.user.updateMany({
+        where: { id: user.id, personId: null, isActive: true, role: UserRole.JOB_SEEKER },
+        data: { personId: person.id, displayName: person.name }
+      });
+      if (binding.count !== 1) throw new AppError(409, "PERSON_BINDING_CONFLICT", "本人档案已被其他请求绑定，请刷新登录后重试");
+      await writeAudit(tx, request, { action: "JOB_SEEKER_PROFILE_CREATED", resourceType: "User", resourceId: user.id,
+        after: { personId: person.id, consentConfirmed: bound.consent === true } });
+    }
 
     if (!existing || shouldRestart) {
       await tx.personStatusLog.create({

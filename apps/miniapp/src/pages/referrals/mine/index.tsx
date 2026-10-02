@@ -30,7 +30,7 @@ export default function MyReferralsPage() {
           </SectionCard>
         ))}
       </AsyncBoundary>
-      <CandidateNavigation active="applications" user={user} />
+      <CandidateNavigation active="referrals" user={user} />
     </PageShell>
   );
 }

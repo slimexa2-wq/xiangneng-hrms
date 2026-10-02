@@ -1,5 +1,5 @@
 import Taro from "@tarojs/taro";
-import { Input, View } from "@tarojs/components";
+import { Button, Input, View } from "@tarojs/components";
 import { useMemo, useState } from "react";
 import { allJobs, allPublicJobs } from "../../../api/services";
 import { AccessDenied, AsyncBoundary, JobCard, PageShell } from "../../../components/ui";
@@ -20,7 +20,7 @@ function StaffJobList({ user }: { user: SessionUser }) {
   const [keyword, setKeyword] = useState("");
   const jobs = useAsyncData(
     () => user ? allJobs({ status: "RECRUITING" }) : allPublicJobs({ status: "RECRUITING" }),
-    [Boolean(user)]
+    [user.id]
   );
   const filtered = useMemo(() => {
     const term = keyword.trim().toLowerCase();
@@ -29,6 +29,7 @@ function StaffJobList({ user }: { user: SessionUser }) {
       [job.title, job.project?.name, job.projectName, job.workLocation].some((value) => value?.toLowerCase().includes(term))
     );
   }, [jobs.data, keyword]);
+  Taro.usePullDownRefresh(() => { void jobs.reload().finally(() => Taro.stopPullDownRefresh()); });
 
   if (user && !user.permissions.includes("job:read")) return <AccessDenied />;
   const portal = user ? portalForRole(user.role) : "job-seeker";
@@ -49,6 +50,7 @@ function StaffJobList({ user }: { user: SessionUser }) {
           />
         ))}
       </AsyncBoundary>
+      <Button className="button button--secondary" onClick={() => void Taro.reLaunch({ url: "/pages/index/index" })}>返回工作台</Button>
     </PageShell>
   );
 }

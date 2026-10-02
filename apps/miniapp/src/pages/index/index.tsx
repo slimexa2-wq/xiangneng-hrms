@@ -2,7 +2,7 @@ import Taro from "@tarojs/taro";
 import { Button, Text, View } from "@tarojs/components";
 import { useEffect, useRef } from "react";
 import { api, type OverviewStatistics } from "../../api/services";
-import { AsyncBoundary, ConfigGapBanner, MetricGrid, PageShell, SectionCard } from "../../components/ui";
+import { AsyncBoundary, ConfigGapBanner, MetricGrid, PageShell, SectionCard, StatePanel } from "../../components/ui";
 import { menuForUser, portalForRole, roleLabels } from "../../domain/roles";
 import { jobDetailPath, referralTokenFromParams } from "../../domain/links";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -27,7 +27,7 @@ export default function HomePage() {
   const canReadStats = Boolean(user?.permissions.includes("dashboard:read"));
   const statistics = useAsyncData(
     () => (canReadStats ? api.overview() : Promise.resolve({})),
-    [canReadStats]
+    [canReadStats, user?.id, user?.role, user?.branchId, user?.supplierId, user?.projectIds.join(",")]
   );
 
   useEffect(() => {
@@ -67,20 +67,20 @@ export default function HomePage() {
         <Text className="hero__meta">查看账号、数据范围与配置状态 ›</Text>
       </View>
       <ConfigGapBanner />
-      {metrics.length ? (
+      {canReadStats && metrics.length ? (
         <AsyncBoundary loading={statistics.loading} error={statistics.error} onRetry={() => void statistics.reload()}>
           <MetricGrid metrics={metrics} />
         </AsyncBoundary>
       ) : null}
       <SectionCard title="常用功能">
-        <View className="menu-grid">
+        {!menuForUser(user).length ? <StatePanel title="当前账号暂未开通业务入口" description="可以先核对我的信息，或联系负责人确认业务授权。" actionText="我的信息" onAction={() => void Taro.navigateTo({ url: "/pages/profile/index/index" })} /> : <View className="menu-grid">
           {menuForUser(user).map((item) => (
             <View className="menu-item" key={item.path} onClick={() => void Taro.navigateTo({ url: item.path })}>
               <Text className="menu-item__title">{item.title}</Text>
               <Text className="menu-item__description">{item.description}</Text>
             </View>
           ))}
-        </View>
+        </View>}
       </SectionCard>
     </PageShell>
   );

@@ -59,7 +59,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     return session as T;
   }
 
-  return (value?.data ?? value) as T;
+  const payload = value?.data ?? value;
+  if (init.method === 'POST' && /^\/api\/jobs\/[^/]+\/apply(?:\?.*)?$/.test(path) && payload?.ok !== true) {
+    throw new ApiError(502, 'INVALID_APPLICATION_RESPONSE', '报名服务返回了无效结果，请刷新后重试');
+  }
+  return payload as T;
 }
 
 export function jsonBody(value: unknown): Pick<RequestInit, 'body'> {

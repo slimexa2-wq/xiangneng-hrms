@@ -3,16 +3,17 @@ import { Button, Canvas, Text, View } from "@tarojs/components";
 import { useEffect, useState } from "react";
 import { api } from "../../../api/services";
 import type { JobDemand } from "../../../api/types";
-import { getAccessToken } from "../../../auth/session";
+import { clearSessionIfCurrent, getSessionSnapshot } from "../../../auth/session";
 import { AccessDenied, AsyncBoundary, FieldRow, PageShell, ProjectGallery, SectionCard, StatusTag } from "../../../components/ui";
 import { runtimeConfig } from "../../../config/runtime";
 import { formatDate, projectName } from "../../../domain/format";
-import { jobDetailPath } from "../../../domain/links";
+import { applicationFormPath, jobDetailPath, loginPath } from "../../../domain/links";
 import { isEmployeeRole, portalForRole } from "../../../domain/roles";
 import { useAsyncData } from "../../../hooks/useAsyncData";
 import { useSession } from "../../../hooks/useSession";
 import { ReferralOfferCard, RecruitmentSalary } from "../../../components/recruitment";
 import { jobCategory, remainingJobs } from "../../../domain/recruitment";
+import { backOrHome } from "../../../utils/navigation";
 
 async function loadJob(id: string, authenticated: boolean): Promise<JobDemand> {
   return authenticated ? api.job(id) : api.publicJob(id);
@@ -26,15 +27,16 @@ export default function JobDetailPage() {
   const [sharePath, setSharePath] = useState<string | null>(null);
   const job = useAsyncData(
     () => id ? loadJob(id, Boolean(user)) : Promise.reject(new Error("缺少岗位 ID")),
-    [id, Boolean(user)]
+    [id, user?.id]
   );
 
   Taro.useShareAppMessage(() => ({
     title: job.data?.title ? `好工到｜${job.data.title} ${job.data.salary}` : "好工到 · 四川招聘",
-    path: sharePath ?? jobDetailPath(id, referralToken)
+    path: user && isEmployeeRole(user.role) ? sharePath ?? jobDetailPath(id, referralToken) : jobDetailPath(id, referralToken)
   }));
 
   useEffect(() => {
+    setSharePath(null);
     if (!user || !isEmployeeRole(user.role) || !id || !user.permissions.includes("referral:create")) return;
     let cancelled = false;
     void api.createReferralShare(id).then((share) => {
@@ -49,8 +51,8 @@ export default function JobDetailPage() {
   const data = job.data;
   const phone = data?.project?.managerPhone ?? null;
   const portal = user ? portalForRole(user.role) : "job-seeker";
-  const applyLabel = portal === "supplier" ? "立即报人" : portal === "employee" ? "推荐报名" : portal === "operator" ? "代为报名" : "立即报名";
-  const canApply = !user || user.permissions.includes("application:create") || user.permissions.includes("referral:create");
+  const applyLabel = portal === "supplier" ? "立即报人" : portal === "operator" ? "代为报名" : "立即报名";
+  const canApply = !user || user.permissions.includes(portal === "operator" ? "people:write" : "application:create");
 
   const copyReferralLink = async () => {
     if (!sharePath) {
@@ -62,7 +64,8 @@ export default function JobDetailPage() {
 
   const createReferralQrFile = async (): Promise<string> => {
     if (!runtimeConfig.wechatConfigured) throw new Error("真实微信小程序配置尚未完成");
-    const accessToken = getAccessToken();
+    const session = getSessionSnapshot();
+    const accessToken = session.token;
     if (!accessToken || !data) throw new Error("登录状态或岗位信息无效");
     const response = await Taro.request<ArrayBuffer>({
       url: `${runtimeConfig.apiBaseUrl}/wechat/referral-qrcode`,
@@ -71,6 +74,7 @@ export default function JobDetailPage() {
       responseType: "arraybuffer",
       header: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }
     });
+    if (response.statusCode === 401) clearSessionIfCurrent(session);
     if (response.statusCode < 200 || response.statusCode >= 300) throw new Error(`二维码生成失败（${response.statusCode}）`);
     const filePath = `${Taro.env.USER_DATA_PATH}/xiangneng-referral-${data.id}.png`;
     await new Promise<void>((resolve, reject) => {
@@ -205,13 +209,14 @@ export default function JobDetailPage() {
               className="button"
               disabled={data.status !== "RECRUITING" || !canApply}
               onClick={() => void Taro.navigateTo({
-                url: `/pages/application/form/index?jobId=${encodeURIComponent(data.id)}${referralToken ? `&ref=${encodeURIComponent(referralToken)}` : ""}`
+                url: applicationFormPath(data.id, referralToken)
               })}
             >
               {data.status !== "RECRUITING" ? "当前岗位不可报名" : canApply ? applyLabel : "当前账号仅可查看"}
             </Button></View>
             {user && isEmployeeRole(user.role) && user.permissions.includes("referral:create") ? (
               <View className="action-row">
+                <Button className="button button--secondary" onClick={() => void Taro.navigateTo({ url: applicationFormPath(data.id, undefined, "referral") })}>推荐他人报名</Button>
                 <Button className="button button--secondary" disabled={!sharePath} onClick={() => void copyReferralLink()}>复制推荐链接</Button>
                 <Button className="button button--secondary" openType="share" disabled={!sharePath}>微信转发</Button>
                 <Button className="button button--secondary" onClick={() => void previewReferralQr()}>推荐二维码</Button>
@@ -222,6 +227,8 @@ export default function JobDetailPage() {
           </>
         ) : null}
       </AsyncBoundary>
+      {!user && id ? <Button className="button button--secondary" onClick={() => void Taro.navigateTo({ url: `${loginPath(jobDetailPath(id, referralToken))}&method=wechat` })}>微信登录后报名并查进度</Button> : null}
+      <Button className="button button--secondary" onClick={() => void backOrHome("/pages/jobs/index/index")}>{Taro.getCurrentPages().length > 1 ? "返回上一页" : "查看其他岗位"}</Button>
     </PageShell>
   );
 }

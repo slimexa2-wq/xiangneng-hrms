@@ -2,17 +2,15 @@ import Taro from "@tarojs/taro";
 import { Button, Input, ScrollView, Text, View } from "@tarojs/components";
 import type { JobDemand, SessionUser } from "../api/types";
 import { formatMoney, projectName } from "../domain/format";
-import { jobDetailPath } from "../domain/links";
+import { applicationFormPath, jobDetailPath } from "../domain/links";
 import { recruitmentCategories, recruitmentCities, rewardCondition } from "../domain/recruitment";
-import { isEmployeeRole } from "../domain/roles";
 
 type CandidateTab = "jobs" | "applications" | "referrals" | "profile";
 
 export function CandidateNavigation({ active, user }: { active: CandidateTab; user?: SessionUser | null }) {
-  const employee = isEmployeeRole(user?.role);
   const items = [
     { key: "jobs", label: "找工作", path: "/pages/jobs/index/index" },
-    { key: "applications", label: employee ? "我的推荐" : "我的报名", path: employee ? "/pages/referrals/mine/index" : "/pages/application/mine/index" },
+    { key: "applications", label: "我的报名", path: "/pages/application/mine/index" },
     { key: "referrals", label: "推荐奖励", path: "/pages/referrals/index/index" },
     { key: "profile", label: "我的", path: "/pages/profile/index/index" }
   ];
@@ -60,13 +58,13 @@ export function RecruitmentFilters({ keyword, city, category, onKeyword, onCity,
 }
 
 export function RecruitmentSalary({ salary }: { salary: string }) {
-  const matched = salary.match(/^(.*?)(元\s*[\/／]\s*(?:小时|月|天|日|年|周))(.*)$/);
+  const matched = salary.match(/^(.*?)(元\s*[\/／]\s*(?:小时|月|天|日|年|周|时))(.*)$/);
   return <View className="recruitment-salary"><Text className="recruitment-salary__amount">{matched ? matched[1] : salary || "薪资待确认"}</Text>{matched ? <Text className="recruitment-salary__unit">{matched[2]}</Text> : null}{matched?.[3] ? <Text className="recruitment-salary__note">{matched[3]}</Text> : null}</View>;
 }
 
-export function RecruitmentJobCard({ job, actionLabel = "立即报名", showReward = false, canApply = true }: { job: JobDemand; actionLabel?: string; showReward?: boolean; canApply?: boolean }) {
+export function RecruitmentJobCard({ job, actionLabel = "立即报名", showReward = false, canApply = true, referral = false }: { job: JobDemand; actionLabel?: string; showReward?: boolean; canApply?: boolean; referral?: boolean }) {
   const navigate = () => void Taro.navigateTo({ url: jobDetailPath(job.id) });
-  const apply = () => void Taro.navigateTo({ url: `/pages/application/form/index?jobId=${encodeURIComponent(job.id)}` });
+  const apply = () => void Taro.navigateTo({ url: applicationFormPath(job.id, undefined, referral ? "referral" : undefined) });
   return (
     <View className="recruitment-job" ariaRole="button" ariaLabel={`${job.title}，${job.salary}，${job.workLocation}，查看详情`} onClick={navigate}>
       <Text className="recruitment-job__title">{job.title}</Text>

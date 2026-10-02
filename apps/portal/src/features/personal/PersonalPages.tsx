@@ -6,7 +6,8 @@ import {
   Send, Settings, Share2, ShieldCheck, Star, UserRound, UsersRound, WalletCards
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, jsonBody } from '../../app/api';
+import { api, demoFallbackEnabled, jsonBody } from '../../app/api';
+import { useLogout } from '../../app/useLogout';
 import { formatSalaryRange } from '../../app/format';
 import { hasJobPreference, isRecruiting, jobBenefits, jobSalary, recruitmentCities, referralRewardLabel } from '../../app/recruitment';
 import { ApplyDialog } from './ApplyDialog';
@@ -97,6 +98,7 @@ export function MessagesPage({ portal = 'personal' }: { portal?: 'personal' | 's
 interface Referral { id: string; name: string; phone: string; projectName: string; jobTitle: string; status: string; reward: number; rewardStatus: string; createdAt: string; onboardDate?: string; retentionDays?: number; eligibleAt?: string; }
 
 export function ReferralPage({ session }: { session: Session }) {
+  const canRefer = session.permissions?.includes('referral:create') ?? (demoFallbackEnabled && session.personStatus === 'employed');
   const [open, setOpen] = useState(false);
   const [jobId, setJobId] = useState('');
   const [copied, setCopied] = useState(false);
@@ -109,7 +111,7 @@ export function ReferralPage({ session }: { session: Session }) {
   const awaitingPayment = referrals.data?.filter((item) => item.rewardStatus === 'approved').reduce((sum, item) => sum + item.reward, 0) ?? 0;
   return <div className="recruit-referral-page">
     <PageHeader title="推荐有奖" />
-    <section className="referral-banner"><div><h1>好工作，分享给工友</h1><p>好友通过你的邀请报名，入职达标后按政策审核奖励。</p><button className="primary-button" type="button" onClick={() => { share.reset(); setCopied(false); setOpen(true); }}>选择岗位，邀请好友</button></div><Gift /></section>
+    <section className="referral-banner"><div><h1>好工作，分享给工友</h1><p>{canRefer ? '好友通过你的邀请报名，入职达标后按政策审核奖励。' : '员工开通推荐服务后可邀请工友。你可以先浏览岗位，查看工资和奖励条件。'}</p>{canRefer ? <button className="primary-button" type="button" onClick={() => { share.reset(); setCopied(false); setOpen(true); }}>选择岗位，邀请好友</button> : <Link className="primary-button" to="/personal/home">先找合适的工作</Link>}</div><Gift /></section>
     <div className="referral-stats"><div><strong>{referrals.data?.length ?? 0}</strong><span>已推荐人数</span></div><div><strong>¥{awaitingPayment.toLocaleString()}</strong><span>已批准，待发放</span></div><div><strong>¥{paid.toLocaleString()}</strong><span>已发放奖励</span></div></div>
     <Card className="recruit-rules"><h2>奖励怎么领</h2><ol><li>选择岗位，把专属邀请链接发给好友，由好友自主填写报名资料。</li><li>好友入职并达到该岗位规定的在职天数与其他条件后，工作人员核验并审批。</li><li>审批通过后由财务登记发放凭证；仅奖励直接推荐，重复报名不重复计奖。</li></ol></Card>
     <div className="recruit-result-heading"><h2>我的推荐记录</h2><span>{referrals.data?.length ?? 0} 条</span></div>
@@ -132,7 +134,7 @@ export function PersonalMe({ session }: { session: Session }) {
   const profile = useQuery({ queryKey: ['my-person-profile'], queryFn: () => api<Person[]>('/api/people') });
   const person = profile.data?.find((item) => item.id === session.personId) ?? profile.data?.[0];
   return <>
-    <section className="profile-hero"><div className="profile-actions"><Link to="/personal/me/help" aria-label="帮助中心"><Headphones size={19} /></Link><Link to="/personal/me/settings" aria-label="设置"><Settings size={19} /></Link></div><div><Avatar name={session.name} size={62} /><div><h1>{session.name}<StatusTag status={session.personStatus ?? 'registered'} label={isEmployee ? '已入职员工' : '求职者'} /></h1><p>{person?.phone ?? '正在读取人员档案…'}</p></div></div></section>
+    <section className="profile-hero"><div className="profile-actions"><Link to="/personal/me/help" aria-label="帮助中心"><Headphones size={19} /></Link><Link to="/personal/me/settings" aria-label="设置"><Settings size={19} /></Link></div><div><Avatar name={session.name} size={62} /><div><h1>{session.name}<StatusTag status={session.personStatus ?? 'registered'} label={isEmployee ? '已入职员工' : '求职者'} /></h1><p>{person?.phone ?? (profile.isLoading ? '正在读取人员档案…' : profile.error ? '档案暂时无法读取，请稍后重试' : '首次本人报名后显示人员信息')}</p></div></div></section>
     <Card className="function-panel"><h2>常用功能</h2><div className="function-grid">{allFunctions.filter((item) => !item.employeeOnly || isEmployee).map((item) => <Link key={item.label} to={item.path.startsWith('/') ? item.path : `/personal/me/${item.path}`}><span><item.icon /></span><strong>{item.label}</strong></Link>)}</div></Card>
     <Card className="menu-list"><h2>其他服务</h2><Link to="profile"><UserRound />个人资料<ChevronRight /></Link><Link to="help"><HelpCircle />帮助中心<ChevronRight /></Link><Link to="help"><Headphones />求职咨询<ChevronRight /></Link><Link to="settings"><Settings />设置<ChevronRight /></Link></Card>
   </>;
@@ -198,13 +200,14 @@ function AppealForm({ supplier, open, onClose, onSubmit, submitting, error }: { 
 
 export function GenericPersonalPage({ title }: { title: string }) {
   const { page = '' } = useParams();
-  const profile = useQuery({ queryKey: ['my-person-profile'], queryFn: () => api<Person[]>('/api/people') });
+  const logout = useLogout();
+  const profile = useQuery({ queryKey: ['my-person-profile'], queryFn: () => api<Person[]>('/api/people'), enabled: page === 'profile' });
   const person = profile.data?.[0];
   const pageTitle = ({ profile: '个人资料', help: '帮助中心', settings: '设置' } as Record<string, string>)[page] ?? title;
   const details: Array<[string, string]> = page === 'profile'
     ? [['姓名', person?.name ?? '正在读取'], ['手机号', person?.phone ?? '正在读取'], ['身份证号', person?.idCard ?? '正在读取'], ['员工编号', person?.employeeNo ?? '未生成'], ['当前项目', person?.projectName ?? '正在读取'], ['岗位', person?.jobTitle ?? '正在读取']]
     : page === 'settings'
-      ? [['消息通知', '已开启'], ['信息展示', '权限范围内展示完整业务信息'], ['数据同步', '后台、小程序与AI助手实时联动'], ['当前版本', '好工到 · HRMS 招聘模块']]
+      ? [['消息通知', '在“我的消息”查看站内通知'], ['信息展示', '仅展示当前账号权限范围内的信息'], ['数据同步', '页面从 HRMS 后台读取最新记录'], ['当前版本', '好工到 · HRMS 招聘模块']]
       : [['招聘咨询', '在岗位详情查看负责人联系方式'], ['申诉处理', '提交后可在申诉记录查看进度'], ['数据说明', '仅展示当前账号权限范围内的业务数据']];
-  return <><PageHeader title={pageTitle} back /><Card className="detail-section">{details.map(([label, value]) => <DetailLine key={label} label={label} value={value} />)}</Card>{page === 'help' && <Link className="primary-button full-button" to="/personal/home"><BriefcaseBusiness size={18} />查看岗位联系方式</Link>}</>;
+  return <><PageHeader title={pageTitle} back /><Card className="detail-section">{details.map(([label, value]) => <DetailLine key={label} label={label} value={value} />)}</Card>{page === 'settings' && <><button className="secondary-button full-button" type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>{logout.isPending ? '正在退出…' : '退出当前账号'}</button>{logout.error && <p className="form-error" role="alert">{logout.error.message}，请重试。</p>}</>}{page === 'help' && <Link className="primary-button full-button" to="/personal/home"><BriefcaseBusiness size={18} />查看岗位联系方式</Link>}</>;
 }

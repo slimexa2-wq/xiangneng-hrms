@@ -20,4 +20,11 @@ describe('正式报名的失败处理', () => {
     expect(sessionStorage.getItem('xiangneng_core_token')).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it.each(['<html>登录页面</html>', '{}', '{"ok":false}'])('HTTP 200 的无效报名响应不会误报成功：%s', async (body) => {
+    vi.stubEnv('VITE_PORTAL_DEMO_FALLBACK', 'false');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status: 200 })));
+    const { api } = await import('./api');
+    await expect(api('/api/jobs/job-id/apply', { method: 'POST', body: JSON.stringify({ consent: true }) })).rejects.toThrow('无效结果');
+    expect(localStorage.getItem('xiangneng.portal.demo-state.v3')).toBeNull();
+  });
 });

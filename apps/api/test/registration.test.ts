@@ -157,7 +157,81 @@ const baseInput: PersonRegistrationInput = {
   source: ApplicationSource.OPERATOR
 };
 
+function firstSeekerStore() {
+  const store = registrationStore();
+  const seeker = session({ role: UserRole.JOB_SEEKER, personId: null, username: "wx_new" });
+  const account = { id: seeker.id, role: UserRole.JOB_SEEKER, isActive: true, personId: null as string | null, displayName: "微信求职者" };
+  const bindings: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
+  const behavior = { bindingCount: 1 };
+  const delegate = store.tx.user as { findUnique: (raw: unknown) => Promise<unknown>; updateMany: (raw: unknown) => Promise<{ count: number }> };
+  const findRecommender = delegate.findUnique;
+  delegate.findUnique = async (raw) => (raw as { where: { id: string } }).where.id === seeker.id ? { ...account } : findRecommender(raw);
+  delegate.updateMany = async (raw) => {
+    const binding = raw as (typeof bindings)[number];
+    bindings.push(binding);
+    if (behavior.bindingCount === 1) Object.assign(account, binding.data);
+    return { count: behavior.bindingCount };
+  };
+  Object.assign(store.prisma, { $transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+    const saved = { people: structuredClone(store.people), applications: structuredClone(store.applications), referrals: structuredClone(store.referrals), account: { ...account } };
+    try { return await callback(store.tx); } catch (error) {
+      store.people.splice(0, store.people.length, ...saved.people);
+      store.applications.splice(0, store.applications.length, ...saved.applications);
+      store.referrals.splice(0, store.referrals.length, ...saved.referrals);
+      Object.assign(account, saved.account);
+      throw error;
+    }
+  } });
+  return { ...store, seeker, account, bindings, behavior };
+}
+
 describe("统一人员档案与报名来源", () => {
+  it("首次求职者报名原子创建和绑定档案，旧session再次报名按DB身份幂等", async () => {
+    const store = firstSeekerStore();
+    const first = await registerPerson(store.prisma, testConfig, request(store.seeker), { ...baseInput, source: ApplicationSource.SELF, consent: true }, store.seeker);
+    expect(store.account.personId).toBe(first.person.id);
+    expect(store.account.role).toBe(UserRole.JOB_SEEKER);
+    expect(store.bindings[0]?.where).toMatchObject({ id: store.seeker.id, personId: null, isActive: true, role: UserRole.JOB_SEEKER });
+    expect(store.bindings[0]?.data).toEqual({ personId: first.person.id, displayName: baseInput.name });
+    await registerPerson(store.prisma, testConfig, request(store.seeker), baseInput, store.seeker);
+    expect(store.people).toHaveLength(1);
+    expect(store.applications).toHaveLength(1);
+    expect(store.bindings).toHaveLength(1);
+    await expect(registerPerson(store.prisma, testConfig, request(store.seeker), { ...baseInput, idCard: "510101199101011234" }, store.seeker))
+      .rejects.toMatchObject({ statusCode: 403, code: "PERSON_IDENTITY_MISMATCH" });
+    expect(store.people).toHaveLength(1);
+  });
+
+  it("首次求职者不能凭已有身份证认领档案或覆盖资料", async () => {
+    const store = firstSeekerStore();
+    const operator = session({});
+    await registerPerson(store.prisma, testConfig, request(operator), baseInput, operator);
+    await expect(registerPerson(store.prisma, testConfig, request(store.seeker), { ...baseInput, name: "冒用姓名", phone: "13900139000" }, store.seeker))
+      .rejects.toMatchObject({ statusCode: 403, code: "PERSON_IDENTITY_MISMATCH" });
+    expect(store.account.personId).toBeNull();
+    expect(store.bindings).toHaveLength(0);
+    expect(store.people[0]).toMatchObject({ name: baseInput.name, phone: baseInput.phone });
+    expect(store.applications).toHaveLength(1);
+  });
+
+  it("档案绑定CAS冲突回滚新建人员，不留下报名或孤立档案", async () => {
+    const store = firstSeekerStore();
+    store.behavior.bindingCount = 0;
+    await expect(registerPerson(store.prisma, testConfig, request(store.seeker), baseInput, store.seeker))
+      .rejects.toMatchObject({ statusCode: 409, code: "PERSON_BINDING_CONFLICT" });
+    expect(store.people).toHaveLength(0);
+    expect(store.applications).toHaveLength(0);
+    expect(store.account.personId).toBeNull();
+  });
+
+  it("审计失败时首次档案创建和账号绑定一起回滚", async () => {
+    const store = firstSeekerStore();
+    (store.tx.auditLog as { create: () => Promise<unknown> }).create = async () => { throw new Error("audit store unavailable"); };
+    await expect(registerPerson(store.prisma, testConfig, request(store.seeker), baseInput, store.seeker)).rejects.toThrow("audit store unavailable");
+    expect(store.people).toHaveLength(0);
+    expect(store.applications).toHaveLength(0);
+    expect(store.account.personId).toBeNull();
+  });
   it("同人同岗绑定首位推荐人，重复报名不创建第二次奖励或允许抢推荐", async () => {
     const store = registrationStore();
     const first = session({ role: UserRole.EMPLOYEE, id: "60000000-0000-4000-8000-000000000003" });

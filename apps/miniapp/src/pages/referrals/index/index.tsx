@@ -7,24 +7,25 @@ import { useSession } from "../../../hooks/useSession";
 import { localMonthString } from "../../../domain/format";
 import { CandidateNavigation, RecruitmentJobCard } from "../../../components/recruitment";
 import { isEmployeeRole } from "../../../domain/roles";
+import { loginPath } from "../../../domain/links";
 
 export default function ReferralHomePage() {
   const user = useSession(false);
   const canRefer = Boolean(isEmployeeRole(user?.role) && user?.permissions.includes("referral:create"));
-  const jobs = useAsyncData(() => canRefer ? allJobs({ status: "RECRUITING" }) : Promise.resolve(null), [canRefer]);
-  const referrals = useAsyncData(() => canRefer ? api.myReferrals() : Promise.resolve([]), [canRefer]);
-  const rewards = useAsyncData(() => canRefer ? api.myRewards() : Promise.resolve([]), [canRefer]);
+  const jobs = useAsyncData(() => canRefer ? allJobs({ status: "RECRUITING" }) : Promise.resolve(null), [canRefer, user?.id]);
+  const referrals = useAsyncData(() => canRefer ? api.myReferrals() : Promise.resolve([]), [canRefer, user?.id]);
+  const rewards = useAsyncData(() => canRefer ? api.myRewards() : Promise.resolve([]), [canRefer, user?.id]);
   if (!user || user.role === "JOB_SEEKER") return (
     <PageShell title="推荐奖励" subtitle="好友找到工作，奖励条件先看清" className="recruitment-shell">
       <View className="referral-offer"><Text className="referral-offer__eyebrow">一次直接推荐</Text><Text className="referral-offer__condition">内部员工推荐，按岗位规则领取奖励</Text><Text className="referral-offer__rule">推荐入口面向已绑定人员档案的内部员工开放。具体奖励金额、员工类型、入职满期天数和不计奖情形，在岗位详情中公示。</Text></View>
       <SectionCard title="奖励怎样发放？"><View className="referral-steps"><Text>1. 员工分享岗位，好友报名</Text><Text>2. 好友入职，满足在职期限</Text><Text>3. 财务审核，通过后安排付款</Text><Text>4. 在奖励记录中查看实际发放状态</Text></View><Text className="muted">报名不等于奖励到账。推荐资格和奖励以该岗位有效政策为准。</Text></SectionCard>
-      {!user ? <Button className="button" onClick={() => void Taro.navigateTo({ url: "/pages/login/index" })}>员工登录，查看我的奖励</Button> : null}
+      {!user ? <Button className="button" onClick={() => void Taro.navigateTo({ url: loginPath("/pages/referrals/index/index") })}>员工登录，查看我的奖励</Button> : null}
       <Button className="button button--secondary" onClick={() => void Taro.reLaunch({ url: "/pages/jobs/index/index" })}>先看看招聘岗位</Button>
       <CandidateNavigation active="referrals" user={user} />
     </PageShell>
   );
   if (!canRefer) {
-    return <AccessDenied message="内部推荐仅向已绑定人员档案的内部员工开放。" />;
+    return <AccessDenied message="当前账号还没有员工推荐权限。本人找工作可以在岗位列表报名；需要推荐他人时，请先核实员工身份和授权。" />;
   }
   const referralItems = referrals.data ? itemsOf(referrals.data) : [];
   const rewardItems = rewards.data ? itemsOf(rewards.data) : [];
@@ -63,6 +64,7 @@ export default function ReferralHomePage() {
               key={job.id}
               job={job}
               actionLabel="推荐报名"
+              referral
               showReward
             />
           ))}

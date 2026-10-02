@@ -41,6 +41,7 @@ export function portalSession(user: SessionUser) {
   const role = user.username === "demo_project" ? "project_manager" : portalRole(user.role);
   return {
     personaId: user.username,
+    permissions: user.permissions,
     name: user.displayName,
     role,
     subtitle: role === "group_leader"

@@ -27,6 +27,9 @@ export type OverviewStatistics = {
 };
 
 export const api = {
+  me: () => apiRequest<SessionUser>("/auth/me"),
+  applyOwnJob: (jobId: string, input: { consent: true; referralToken?: string }) =>
+    apiRequest<void>(`/portal/jobs/${encodeURIComponent(jobId)}/apply`, { method: "POST", data: input, rawSuccess: true }),
   login: (username: string, password: string) =>
     apiRequest<LoginResult>("/auth/login", {
       method: "POST",
@@ -77,7 +80,7 @@ export const api = {
       data: input
     }),
   createPublicApplication: (input: RegistrationInput & { referralToken?: string }) =>
-    apiRequest<{ accepted: true; message: string }>("/public/applications", {
+    apiRequest<{ received: true; message: string }>("/public/applications", {
       method: "POST",
       authenticated: false,
       data: input

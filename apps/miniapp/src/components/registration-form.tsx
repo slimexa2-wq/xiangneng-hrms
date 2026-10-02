@@ -8,6 +8,8 @@ import { useAsyncData } from "../hooks/useAsyncData";
 import { DateField, FormField, SelectField, TextAreaField, TextField } from "./form";
 import { AsyncBoundary, SectionCard, StatePanel } from "./ui";
 import { RecruitmentSalary } from "./recruitment";
+import { getSessionSnapshot, getSessionUser, isSessionCurrent, saveSessionIfCurrent } from "../auth/session";
+import { applicationFormPath, loginPath } from "../domain/links";
 
 const emptyForm = (source: RegistrationInput["source"]): RegistrationInput => ({
   name: "",
@@ -45,6 +47,8 @@ export function RegistrationForm({
   const [consent, setConsent] = useState(false);
   const [showOptional, setShowOptional] = useState(source === "OPERATOR" || source === "SUPPLIER");
   const needsConsent = source === "SELF" || source === "REFERRAL";
+  const account = getSessionUser();
+  const ownApplication = source === "SELF" && !publicMode && Boolean(account?.personId);
   const projects = useAsyncData(
     () => source === "OPERATOR" ? allProjects() : Promise.resolve(null),
     [source]
@@ -98,7 +102,7 @@ export function RegistrationForm({
       return;
     }
     const input = normalizeRegistration(form);
-    const errors = validateRegistration(input);
+    const errors = ownApplication ? [] : validateRegistration(input);
     if (errors.length) {
       await Taro.showModal({ title: "请完善报名信息", content: errors.join("\n"), showCancel: false });
       return;
@@ -113,7 +117,9 @@ export function RegistrationForm({
     }
     submittingRef.current = true;
     setSubmitting(true);
+    let session = getSessionSnapshot();
     try {
+      let accountRefreshed = true;
       if (publicMode) {
         await api.createPublicApplication({ ...input, referralToken, consent: true });
       } else if (source === "OPERATOR") {
@@ -121,19 +127,31 @@ export function RegistrationForm({
       } else if (source === "REFERRAL") {
         await api.createReferral({ ...input, consent: true });
       } else {
-        await api.createApplication({ ...input, referralToken, consent: needsConsent ? true : undefined });
+        if (ownApplication && input.jobDemandId) await api.applyOwnJob(input.jobDemandId, { consent: true, referralToken });
+        else await api.createApplication({ ...input, referralToken, consent: needsConsent ? true : undefined });
+        if (!isSessionCurrent(session)) return;
+        if (source === "SELF") {
+          try {
+            if (!session.token) throw new Error("登录已失效");
+            const currentUser = await api.me();
+            if (!saveSessionIfCurrent(session, currentUser)) return;
+            session = getSessionSnapshot();
+          } catch { accountRefreshed = false; }
+        }
       }
+      if (!isSessionCurrent(session)) return;
       await Taro.showModal({
         title: source === "REFERRAL" ? "推荐已提交" : "报名已提交",
         content: publicMode
-          ? "负责人将根据岗位安排联系你。登录并绑定本人身份后，可以查看报名进度；如曾经报名，请登录后继续办理。"
-          : source === "REFERRAL" ? "推荐已记录，进度和奖励以本人推荐记录中的实际状态为准。" : source === "SUPPLIER" ? "报人信息已记录，请在我的人员查看进度。" : source === "OPERATOR" ? "报名已记录，请在人员查询中继续跟进。" : "报名已记录，请留意负责人联系。可在我的报名中查看进度。",
+          ? "负责人将根据岗位安排联系你。匿名报名后，需由负责人核实身份并把档案绑定到本人账号，才能查询进度。"
+          : source === "REFERRAL" ? "推荐已记录，进度和奖励以本人推荐记录中的实际状态为准。" : source === "SUPPLIER" ? "报人信息已记录，请在我的人员查看进度。" : source === "OPERATOR" ? "报名已记录，请在人员查询中继续跟进。" : accountRefreshed ? "报名已记录，请留意负责人联系。可在我的报名中查看进度。" : "报名已记录，账号资料暂时无法刷新。请重新登录后查看本人报名进度。",
         showCancel: false
       });
       setForm(emptyForm(source));
       setConsent(false);
       onSuccess?.();
     } catch (error) {
+      if (!isSessionCurrent(session)) return;
       await Taro.showModal({
         title: "提交失败",
         content: error instanceof Error ? error.message : "请稍后重试",
@@ -156,8 +174,10 @@ export function RegistrationForm({
         void jobs.reload();
       }}
     >
+      {publicMode ? <SectionCard title="微信登录后报名，更方便查进度"><Text className="muted">首次本人报名会绑定新档案。已经匿名报过名的工友，需要负责人核实后绑定本人账号。</Text><Button className="button button--secondary" disabled={submitting} onClick={() => void Taro.navigateTo({ url: `${loginPath(applicationFormPath(initialJobId, referralToken))}&method=wechat` })}>微信登录后继续报名</Button><Text className="muted">也可以直接在下方匿名报名。</Text></SectionCard> : null}
       {fixedJob && selectedJob ? <SectionCard title="你选择的岗位"><Text className="card-title">{selectedJob.title}</Text><RecruitmentSalary salary={selectedJob.salary} /><Text className="card-meta">{selectedJob.workLocation}</Text></SectionCard> : null}
-      <SectionCard title={source === "REFERRAL" ? "填写被推荐人信息" : "填写报名信息"}>
+      <SectionCard title={ownApplication ? "确认本人报名" : source === "REFERRAL" ? "填写被推荐人信息" : "填写报名信息"}>
+        {ownApplication ? <><Text className="card-title">{account?.displayName}</Text><Text className="muted">使用当前账号已绑定的本人档案报名，无需重复填写姓名和身份证。</Text></> : <>
         <FormField label="姓名" required>
           <TextField value={form.name} placeholder="请输入真实姓名" onChange={(value) => update("name", value)} maxlength={64} />
         </FormField>
@@ -166,7 +186,7 @@ export function RegistrationForm({
         </FormField>
         <FormField label="身份证号" required hint="用于核对本人身份和避免重复建档，仅向办理报名的授权人员展示。">
           <TextField value={form.idCard} placeholder="请输入身份证号" type="idcard" onChange={(value) => update("idCard", value)} maxlength={18} />
-        </FormField>
+        </FormField></>}
         {!fixedJob ? <><FormField label="项目" required>
           <SelectField
             value={form.projectId}
@@ -188,8 +208,8 @@ export function RegistrationForm({
           </FormField>
         ) : null}
       </SectionCard>
-      <View className="registration-optional-toggle" onClick={() => setShowOptional(!showOptional)}><Text>补充信息（选填）</Text><Text>{showOptional ? "收起 −" : "展开 +"}</Text></View>
-      {showOptional ? <SectionCard title="紧急联系人与备注">
+      {!ownApplication ? <View className="registration-optional-toggle" ariaRole="button" ariaLabel={showOptional ? "收起补充信息" : "展开选填信息"} onClick={() => setShowOptional(!showOptional)}><Text>补充信息（选填）</Text><Text>{showOptional ? "收起 −" : "展开 +"}</Text></View> : null}
+      {showOptional && !ownApplication ? <SectionCard title="紧急联系人与备注">
         <FormField label="姓名">
           <TextField value={form.emergencyContactName ?? ""} placeholder="缺失可暂时留空" onChange={(value) => update("emergencyContactName", value)} maxlength={64} />
         </FormField>
@@ -204,10 +224,10 @@ export function RegistrationForm({
         </FormField>
       </SectionCard> : null}
       {needsConsent ? <View className="registration-consent"><CheckboxGroup onChange={(event) => setConsent(event.detail.value.includes("consent"))}><Label className="registration-consent__choice"><Checkbox value="consent" checked={consent} color="#0071e3" /><Text>{source === "REFERRAL" ? "我已取得被推荐人的知情同意，并同意" : "我已阅读并同意"}</Text></Label></CheckboxGroup><Text className="link-text" onClick={() => void Taro.navigateTo({ url: "/pages/policy/index" })}>《报名服务与隐私说明》</Text></View> : null}
-      <Button className="button recruitment-submit" loading={submitting} disabled={submitting || Boolean(initialJobId && (!initialJob || !selectedJob))} onClick={() => void submit()}>{submitText}</Button>
+      <Button className="button recruitment-submit" loading={submitting} disabled={submitting || Boolean(initialJobId && (!initialJob || !selectedJob))} onClick={() => void submit()}>{ownApplication ? "确认本人报名" : submitText}</Button>
       <Text className="muted">
         {publicMode
-          ? "第一次报名可直接提交。已报名过的工友，请登录并绑定本人身份后继续办理。"
+          ? "匿名提交后，需负责人核实并绑定本人账号才可查询进度。"
           : source === "REFERRAL" ? "推荐关系按你的登录身份记录，请填写真实信息。" : "请保持电话畅通，留意岗位负责人联系。"}
       </Text>
     </AsyncBoundary>
