@@ -27,6 +27,9 @@ export type OverviewStatistics = {
 };
 
 export const api = {
+  me: () => apiRequest<SessionUser>("/auth/me"),
+  applyOwnJob: (jobId: string, input: { consent: true; referralToken?: string }) =>
+    apiRequest<void>(`/portal/jobs/${encodeURIComponent(jobId)}/apply`, { method: "POST", data: input, rawSuccess: true }),
   login: (username: string, password: string) =>
     apiRequest<LoginResult>("/auth/login", {
       method: "POST",
@@ -71,13 +74,13 @@ export const api = {
     apiRequest<Person>(`/people/${encodeURIComponent(id)}/notes`, { method: "PATCH", data: { notes } }),
   uploadPersonFile: (id: string, filePath: string, originalName: string) =>
     uploadFile<PersonFile>(`/people/${encodeURIComponent(id)}/files`, filePath, originalName),
-  createApplication: (input: RegistrationInput) =>
+  createApplication: (input: RegistrationInput & { referralToken?: string }) =>
     apiRequest<{ application: Application; person: Person; deduplicated: boolean } | Application>("/applications", {
       method: "POST",
       data: input
     }),
   createPublicApplication: (input: RegistrationInput & { referralToken?: string }) =>
-    apiRequest<{ accepted: true; message: string }>("/public/applications", {
+    apiRequest<{ received: true; message: string }>("/public/applications", {
       method: "POST",
       authenticated: false,
       data: input

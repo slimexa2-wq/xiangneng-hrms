@@ -140,7 +140,13 @@ try {
 
 $apiPid = Start-WorkspaceApp "@xiangneng/api" 3310 "api"
 $adminPid = Start-WorkspaceApp "@xiangneng/admin" 5173 "admin"
-$portalPid = Start-WorkspaceApp "@xiangneng/portal" 4320 "portal"
+$previousPortalFallback = $env:VITE_PORTAL_DEMO_FALLBACK
+$env:VITE_PORTAL_DEMO_FALLBACK = "true"
+try {
+  $portalPid = Start-WorkspaceApp "@xiangneng/portal" 4320 "portal"
+} finally {
+  $env:VITE_PORTAL_DEMO_FALLBACK = $previousPortalFallback
+}
 
 $loginBody = @{ persona = "systemAdmin" } | ConvertTo-Json
 $login = Invoke-RestMethod -Uri "http://127.0.0.1:3310/api/auth/demo-login" -Method Post -ContentType "application/json" -Body $loginBody -TimeoutSec 15

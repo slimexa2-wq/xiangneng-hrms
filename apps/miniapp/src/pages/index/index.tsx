@@ -2,11 +2,12 @@ import Taro from "@tarojs/taro";
 import { Button, Text, View } from "@tarojs/components";
 import { useEffect, useRef } from "react";
 import { api, type OverviewStatistics } from "../../api/services";
-import { AsyncBoundary, ConfigGapBanner, MetricGrid, PageShell, SectionCard } from "../../components/ui";
+import { AsyncBoundary, ConfigGapBanner, MetricGrid, PageShell, SectionCard, StatePanel } from "../../components/ui";
 import { menuForUser, portalForRole, roleLabels } from "../../domain/roles";
 import { jobDetailPath, referralTokenFromParams } from "../../domain/links";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { useSession } from "../../hooks/useSession";
+import { RecruitmentHome } from "../../components/recruitment-home";
 
 function stat(source: OverviewStatistics | null, ...keys: string[]): number | string {
   for (const key of keys) {
@@ -26,7 +27,7 @@ export default function HomePage() {
   const canReadStats = Boolean(user?.permissions.includes("dashboard:read"));
   const statistics = useAsyncData(
     () => (canReadStats ? api.overview() : Promise.resolve({})),
-    [canReadStats]
+    [canReadStats, user?.id, user?.role, user?.branchId, user?.supplierId, user?.projectIds.join(",")]
   );
 
   useEffect(() => {
@@ -39,18 +40,7 @@ export default function HomePage() {
       .catch(() => Taro.showToast({ title: "推荐链接已失效", icon: "none" }));
   }, [referralToken]);
 
-  if (!user) {
-    return (
-      <PageShell title="祥能招聘" subtitle="查看真实开放岗位，报名信息进入统一人员档案">
-        <SectionCard title="求职者入口">
-          <Text className="muted">无需登录即可浏览开放岗位和提交首次报名；已有档案需完成身份绑定后继续办理。</Text>
-          <View className="spacer" />
-          <Button className="button" onClick={() => void Taro.navigateTo({ url: "/pages/jobs/index/index" })}>浏览招聘岗位</Button>
-          <Button className="button button--secondary" onClick={() => void Taro.navigateTo({ url: "/pages/login/index" })}>账号或微信登录</Button>
-        </SectionCard>
-      </PageShell>
-    );
-  }
+  if (!user || user.role === "JOB_SEEKER") return <RecruitmentHome user={user} />;
   const portal = portalForRole(user.role);
   const metrics =
     portal === "operator"
@@ -77,20 +67,20 @@ export default function HomePage() {
         <Text className="hero__meta">查看账号、数据范围与配置状态 ›</Text>
       </View>
       <ConfigGapBanner />
-      {metrics.length ? (
+      {canReadStats && metrics.length ? (
         <AsyncBoundary loading={statistics.loading} error={statistics.error} onRetry={() => void statistics.reload()}>
           <MetricGrid metrics={metrics} />
         </AsyncBoundary>
       ) : null}
       <SectionCard title="常用功能">
-        <View className="menu-grid">
+        {!menuForUser(user).length ? <StatePanel title="当前账号暂未开通业务入口" description="可以先核对我的信息，或联系负责人确认业务授权。" actionText="我的信息" onAction={() => void Taro.navigateTo({ url: "/pages/profile/index/index" })} /> : <View className="menu-grid">
           {menuForUser(user).map((item) => (
             <View className="menu-item" key={item.path} onClick={() => void Taro.navigateTo({ url: item.path })}>
               <Text className="menu-item__title">{item.title}</Text>
               <Text className="menu-item__description">{item.description}</Text>
             </View>
           ))}
-        </View>
+        </View>}
       </SectionCard>
     </PageShell>
   );

@@ -72,9 +72,9 @@ const menuItems: ItemType[] = [
     icon: <UsergroupAddOutlined />,
     label: "招聘管理",
     children: [
-      { key: "/recruitment/demands", label: "招聘需求" },
-      { key: "/recruitment/progress", label: "报名与招聘进度" },
-      { key: "/recruitment/rewards", label: "推荐奖励审核" }
+      { key: "/recruitment/demands", label: "岗位发布" },
+      { key: "/recruitment/progress", label: "报名跟进" },
+      { key: "/recruitment/rewards", label: "推荐奖励" }
     ]
   },
   { key: "/salary-slips", icon: <DollarOutlined />, label: "工资条管理" },
@@ -130,7 +130,7 @@ function moduleConfig(pathname: string): ModuleActionConfig | undefined {
   if (pathname.startsWith("/policies/referral")) return { key: "referral-policies", label: "内部推荐政策", exportPath: "/policies/export", exportQuery: { type: "EMPLOYEE_REFERRAL" }, exportPermission: Permission.POLICY_READ, importable: true };
   if (pathname.startsWith("/recruitment/demands")) return { key: "job-demands", label: "招聘需求", exportPath: "/job-demands/export", exportPermission: Permission.JOB_READ, importable: true };
   if (pathname.startsWith("/recruitment/progress")) return { key: "applications", label: "报名进度", exportPath: "/applications/export", exportPermission: Permission.JOB_READ, importable: true };
-  if (pathname.startsWith("/recruitment/rewards")) return { key: "referral-rewards", label: "推荐奖励", exportPath: "/referral-rewards/export", exportPermission: Permission.REWARD_REVIEW, importable: true };
+  if (pathname.startsWith("/recruitment/rewards")) return { key: "referral-rewards", label: "推荐奖励", exportPath: "/referral-rewards/export", exportPermission: Permission.REWARD_READ, importable: true };
   if (pathname.startsWith("/salary-slips")) return { key: "salary-slips", label: "工资条", exportPath: "/salary-slips/export", exportPermission: Permission.SALARY_MANAGE, importable: true };
   if (pathname.startsWith("/electronic-contracts")) return { key: "electronic-contracts", label: "电子合同", exportPermission: Permission.CONTRACT_MANAGE };
   return undefined;
@@ -180,16 +180,16 @@ export function AppLayout() {
     ...(can(Permission.PROJECT_READ) ? [menuItems[2]!] : []),
     ...(can(Permission.SUPPLIER_READ) ? [menuItems[3]!] : []),
     ...(can(Permission.POLICY_READ) ? [menuItems[4]!] : []),
-    ...(can(Permission.JOB_READ) || can(Permission.REWARD_REVIEW) ? [{
+    ...(can(Permission.JOB_READ) || can(Permission.REWARD_READ) || can(Permission.REWARD_REVIEW) ? [{
       key: "recruitment",
       icon: <UsergroupAddOutlined />,
       label: "招聘管理",
       children: [
         ...(can(Permission.JOB_READ) ? [
-          { key: "/recruitment/demands", label: "招聘需求" },
-          { key: "/recruitment/progress", label: "报名与招聘进度" }
+          { key: "/recruitment/demands", label: "岗位发布" },
+          ...(can(Permission.PEOPLE_READ) ? [{ key: "/recruitment/progress", label: "报名跟进" }] : [])
         ] : []),
-        ...(can(Permission.REWARD_REVIEW) ? [{ key: "/recruitment/rewards", label: "推荐奖励审核" }] : [])
+        ...(can(Permission.REWARD_READ) || can(Permission.REWARD_REVIEW) ? [{ key: "/recruitment/rewards", label: "推荐奖励" }] : [])
       ]
     }] : []),
     ...(can(Permission.SALARY_MANAGE) ? [menuItems[6]!] : []),
@@ -252,7 +252,7 @@ export function AppLayout() {
   );
 
   return (
-    <Layout className="app-shell">
+    <Layout className={`app-shell${location.pathname.startsWith("/recruitment/") || location.pathname === "/policies/referral" ? " recruitment-shell" : ""}`}>
       {desktop ? (
         <Sider width={236} collapsedWidth={76} collapsed={collapsed} trigger={null}>
           <Brand compact={collapsed} />

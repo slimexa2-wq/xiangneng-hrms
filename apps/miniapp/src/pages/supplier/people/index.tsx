@@ -5,6 +5,7 @@ import { api } from "../../../api/services";
 import { AccessDenied, AsyncBoundary, PageShell, PersonCard } from "../../../components/ui";
 import { useAsyncData } from "../../../hooks/useAsyncData";
 import { useSession } from "../../../hooks/useSession";
+import { isSupplierRole } from "../../../domain/roles";
 
 export default function SupplierPeoplePage() {
   const user = useSession();
@@ -16,7 +17,7 @@ export default function SupplierPeoplePage() {
   );
 
   if (!user) return <PageShell title="我的人员" />;
-  if (user.role !== "SUPPLIER" || !user.permissions.includes("people:read")) {
+  if (!isSupplierRole(user.role) || !user.permissions.includes("people:read")) {
     return <AccessDenied message="供应商人员页面仅展示当前供应商自己报送的数据。" />;
   }
 

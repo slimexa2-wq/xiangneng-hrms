@@ -21,6 +21,8 @@ describe("role portal", () => {
     expect(portalForRole("SUPPLIER")).toBe("supplier");
     expect(portalForRole("JOB_SEEKER")).toBe("job-seeker");
     expect(portalForRole("EMPLOYEE")).toBe("employee");
+    expect(portalForRole("OUTSOURCED_EMPLOYEE")).toBe("employee");
+    expect(portalForRole("SUPPLIER_ADMIN")).toBe("supplier");
   });
 
   it("does not expose write actions without permission", () => {

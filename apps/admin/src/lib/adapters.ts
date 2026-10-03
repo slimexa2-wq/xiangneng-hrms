@@ -99,6 +99,9 @@ export function adaptReward(reward: ReferralReward): ReferralReward {
     person: person
       ? adaptPerson({
           ...person,
+          employmentStatus: reward.referral?.application?.employmentStatus ?? person.employmentStatus ?? person.status!,
+          onboardDate: reward.referral?.application ? reward.referral.application.onboardDate : person.onboardDate,
+          offboardDate: reward.referral?.application ? reward.referral.application.offboardDate : person.offboardDate,
           project: person.project ?? jobDemand?.project,
           projectName: person.projectName ?? jobDemand?.project?.name
         })

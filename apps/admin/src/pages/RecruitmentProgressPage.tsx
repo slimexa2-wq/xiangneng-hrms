@@ -7,6 +7,10 @@ import {
   Col,
   Descriptions,
   Drawer,
+  DatePicker,
+  Form,
+  Input,
+  Modal,
   Row,
   Select,
   Space,
@@ -14,9 +18,12 @@ import {
   Table,
   Tag
 } from "antd";
+import dayjs from "dayjs";
+import type { Dayjs } from "dayjs";
 import type { TableColumnsType } from "antd";
 import {
   ApplicationSource,
+  EmploymentStatus,
   InterviewStatus,
   Permission,
   labels
@@ -27,6 +34,8 @@ import { ContentCard } from "../components/ContentCard";
 import { ErrorBlock } from "../components/AsyncState";
 import { PageHeader } from "../components/PageHeader";
 import { PermissionGuard } from "../components/PermissionGuard";
+import { RecruitmentModuleNav } from "../components/RecruitmentModuleNav";
+import { RecruitmentWorkspace } from "../components/RecruitmentWorkspace";
 import { ReferenceSelect } from "../components/ReferenceSelect";
 import { StatusTag } from "../components/StatusTag";
 import { useApiResource } from "../hooks/useApiResource";
@@ -53,6 +62,12 @@ const sourceLabels: Record<ApplicationSource, string> = {
   [ApplicationSource.REFERRAL]: "内部推荐"
 };
 
+type FollowUpValues = { status: InterviewStatus; interviewDate?: Dayjs; notes?: string };
+
+function canFollowUp(application: Application): boolean {
+  return application.employmentStatus !== EmploymentStatus.ACTIVE && application.employmentStatus !== EmploymentStatus.LEFT;
+}
+
 function RecruitmentProgressContent() {
   const { message } = App.useApp();
   const { can } = useAuth();
@@ -62,13 +77,18 @@ function RecruitmentProgressContent() {
   const [pageSize, setPageSize] = useState(20);
   const [jobDemandId, setJobDemandId] = useState<string | undefined>(searchParams.get("jobDemandId") ?? undefined);
   const [source, setSource] = useState<ApplicationSource>();
+  const [keyword, setKeyword] = useState("");
+  const [interviewStatus, setInterviewStatus] = useState<InterviewStatus>();
+  const [employmentStatus, setEmploymentStatus] = useState<EmploymentStatus>();
   const [detail, setDetail] = useState<Application>();
   const [detailOpen, setDetailOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<string>();
+  const [followingUp, setFollowingUp] = useState<Application>();
+  const [followUpForm] = Form.useForm<FollowUpValues>();
 
   const resource = useApiResource(
-    async () => mapList(await api.get<ApplicationResponse | Application[]>("/applications", { page, pageSize, jobDemandId, source }), adaptApplication, page, pageSize),
-    [page, pageSize, jobDemandId, source]
+    async () => mapList(await api.get<ApplicationResponse | Application[]>("/applications", { page, pageSize, jobDemandId, source, keyword, interviewStatus, employmentStatus }), adaptApplication, page, pageSize),
+    [page, pageSize, jobDemandId, source, keyword, interviewStatus, employmentStatus]
   );
   const jobsResource = useApiResource(
     async () => mapList(await getAllPages<JobDemand>("/job-demands"), adaptJobDemand, 1, 200),
@@ -85,12 +105,20 @@ function RecruitmentProgressContent() {
     remainingCount: selectedJob.remainingCount ?? 0
   } : undefined;
 
-  const updateInterview = async (application: Application, status: InterviewStatus) => {
+  const openFollowUp = (application: Application) => {
+    followUpForm.resetFields();
+    followUpForm.setFieldsValue({ status: application.interviewStatus ?? InterviewStatus.PENDING_ARRIVAL, interviewDate: application.interviewDate ? dayjs(application.interviewDate) : undefined });
+    setFollowingUp(application);
+  };
+
+  const updateInterview = async (application: Application, values: FollowUpValues) => {
     setUpdatingId(application.id);
     try {
-      await api.patch(applicationInterviewEndpoint(application.id), { status });
-      message.success("面试状态已更新");
-      await resource.reload();
+      const saved = await api.patch<Partial<Application>>(applicationInterviewEndpoint(application.id), { ...values, interviewDate: values.interviewDate?.toISOString() ?? null });
+      message.success("面试跟进已保存，人员档案同步更新");
+      setFollowingUp(undefined);
+      if (detail?.id === application.id) setDetail(adaptApplication({ ...application, ...saved }));
+      await Promise.all([resource.reload(), jobsResource.reload()]);
     } catch (error) {
       message.error(getErrorMessage(error));
     } finally {
@@ -99,47 +127,37 @@ function RecruitmentProgressContent() {
   };
 
   const columns: TableColumnsType<Application> = [
-    { title: "报名时间", dataIndex: "createdAt", width: 150, render: (value: string) => formatDateTime(value) },
-    { title: "姓名", width: 100, render: (_, row) => row.person?.name ?? "—" },
-    { title: "手机号", width: 130, render: (_, row) => row.person?.phone ?? "—" },
-    { title: "岗位", width: 150, render: (_, row) => row.jobDemand?.title ?? "—" },
-    { title: "项目", width: 180, render: (_, row) => row.jobDemand ? projectName(row.jobDemand) : row.person ? projectName(row.person) : "—" },
+    { title: "报名人", fixed: "left", width: 175, render: (_, row) => <div className="recruitment-cell"><strong className="recruitment-job-title">{row.person?.name ?? "—"}</strong><span>{row.person?.phone ?? "—"}</span><span className="recruitment-cell-muted">{formatDateTime(row.createdAt)}</span></div> },
+    { title: "应聘岗位", width: 250, render: (_, row) => <div className="recruitment-cell"><strong>{row.jobDemand?.title ?? "—"}</strong><span className="recruitment-cell-muted">{row.jobDemand ? projectName(row.jobDemand) : row.person ? projectName(row.person) : "—"}</span>{row.jobDemand?.salary ? <span className="recruitment-salary">{row.jobDemand.salary}</span> : null}</div> },
     { title: "报名来源", dataIndex: "source", width: 120, render: (value: ApplicationSource) => <Tag color="blue">{sourceLabels[value]}</Tag> },
     { title: "供应商", width: 150, render: (_, row) => row.supplier?.name || "—" },
     { title: "推荐人", width: 120, render: (_, row) => row.recommender?.displayName || "—" },
     { title: "面试日期", width: 110, render: (_, row) => formatDate(row.interviewDate) },
     {
       title: "面试状态",
-      width: 150,
-      render: (_, row) => can(Permission.PEOPLE_WRITE) ? (
-        <Select
-          size="small"
-          style={{ width: 130 }}
-          value={row.interviewStatus}
-          loading={updatingId === row.id}
-          options={Object.entries(labels.interviewStatus).map(([value, label]) => ({ value, label }))}
-          onChange={(value) => void updateInterview(row, value)}
-        />
-      ) : <StatusTag status={row.interviewStatus} />
+      width: 130,
+      render: (_, row) => <StatusTag status={row.interviewStatus} />
     },
     { title: "报名状态", width: 110, render: (_, row) => <StatusTag status={row.employmentStatus} /> },
     {
       title: "操作",
       fixed: "right",
-      width: 150,
+      width: 235,
       render: (_, row) => <Space size={4}>
         <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => { setDetail(row); setDetailOpen(true); }}>详情</Button>
-        {row.personId ? <Button type="link" size="small" onClick={() => navigate(`/people?keyword=${encodeURIComponent(row.person?.idCard ?? row.person?.phone ?? "")}`)}>人员档案</Button> : null}
+        {can(Permission.PEOPLE_WRITE) && canFollowUp(row) ? <Button type="link" size="small" onClick={() => openFollowUp(row)}>跟进</Button> : null}
+        {row.personId && can(Permission.PEOPLE_READ) ? <Button type="link" size="small" onClick={() => navigate(`/people?keyword=${encodeURIComponent(row.person?.idCard ?? row.person?.phone ?? "")}`)}>人员档案</Button> : null}
       </Space>
     }
   ];
 
   return (
-    <>
+    <RecruitmentWorkspace>
+      <RecruitmentModuleNav />
       <PageHeader
-        title="报名与招聘进度"
-        description="供应商报人、求职者报名和内部推荐统一汇入人员档案，并按同一口径跟踪。"
-        extra={<Button icon={<ReloadOutlined />} onClick={() => void resource.reload()} loading={resource.loading}>刷新</Button>}
+        title="报名跟进"
+        description="查看报名、安排面试、记录跟进。办理入职时进入人员档案。"
+        extra={<Button icon={<ReloadOutlined />} onClick={() => { void resource.reload(); void jobsResource.reload(); }} loading={resource.loading}>刷新</Button>}
       />
       {summary ? (
         <Row gutter={[12, 12]} className="summary-strip">
@@ -153,17 +171,20 @@ function RecruitmentProgressContent() {
         </Row>
       ) : null}
       <ContentCard>
-        <div className="filter-grid compact">
+        <div className="recruitment-filter-grid">
+          <Input.Search allowClear placeholder="搜索姓名 / 手机号" value={keyword} onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
           <ReferenceSelect placeholder="招聘需求" options={jobs.map((job) => ({ value: job.id, label: `${job.title} · ${projectName(job)}` }))} value={jobDemandId} onChange={(value) => { setJobDemandId(value as string | undefined); setPage(1); }} loading={jobsResource.loading} />
           <Select allowClear placeholder="报名来源" value={source} options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))} onChange={(value) => { setSource(value); setPage(1); }} />
+          <Select allowClear placeholder="全部面试状态" value={interviewStatus} options={Object.entries(labels.interviewStatus).map(([value, label]) => ({ value, label }))} onChange={(value) => { setInterviewStatus(value); setPage(1); }} />
+          <Select allowClear placeholder="全部入职状态" value={employmentStatus} options={Object.entries(labels.employmentStatus).map(([value, label]) => ({ value, label }))} onChange={(value) => { setEmploymentStatus(value); setPage(1); }} />
         </div>
-        {resource.error && !list ? <ErrorBlock error={resource.error} onRetry={() => void resource.reload()} /> : (
+        {resource.error ? <ErrorBlock error={resource.error} onRetry={() => void resource.reload()} /> : (
           <Table<Application>
             rowKey="id"
             columns={columns}
             dataSource={list?.items ?? []}
             loading={resource.loading}
-            scroll={{ x: 1600 }}
+            scroll={{ x: 1400 }}
             pagination={{ current: page, pageSize, total: list?.pagination.total ?? 0, showSizeChanger: true, showTotal: (total) => `共 ${total} 条报名` }}
             onChange={(pagination) => { setPage(pagination.current ?? 1); setPageSize(pagination.pageSize ?? 20); }}
             locale={{ emptyText: "暂无报名记录" }}
@@ -171,7 +192,7 @@ function RecruitmentProgressContent() {
         )}
       </ContentCard>
 
-      <Drawer title="报名详情" width={680} open={detailOpen} onClose={() => setDetailOpen(false)}>
+      <Drawer title="报名详情" width={680} open={detailOpen} onClose={() => setDetailOpen(false)} extra={detail && can(Permission.PEOPLE_WRITE) && canFollowUp(detail) ? <Button type="primary" onClick={() => openFollowUp(detail)}>记录跟进</Button> : null}>
         {detail ? <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small">
           <Descriptions.Item label="姓名">{detail.person?.name ?? "—"}</Descriptions.Item>
           <Descriptions.Item label="手机号">{detail.person?.phone ?? "—"}</Descriptions.Item>
@@ -189,10 +210,18 @@ function RecruitmentProgressContent() {
           <Descriptions.Item label="推荐人">{detail.recommender?.displayName || "—"}</Descriptions.Item>
         </Descriptions> : null}
       </Drawer>
-    </>
+      <Modal title={`面试跟进 · ${followingUp?.person?.name ?? ""}`} open={Boolean(followingUp)} confirmLoading={Boolean(updatingId)} onCancel={() => { if (!updatingId) setFollowingUp(undefined); }} onOk={() => followUpForm.submit()} okText="保存跟进" cancelText="取消" destroyOnHidden>
+        <Form<FollowUpValues> form={followUpForm} layout="vertical" onFinish={(values) => { if (followingUp) void updateInterview(followingUp, values); }}>
+          <Form.Item label="应聘岗位"><Input value={followingUp?.jobDemand?.title ?? "—"} disabled /></Form.Item>
+          <Form.Item name="status" label="面试状态" rules={[{ required: true, message: "请选择面试状态" }]}><Select options={Object.entries(labels.interviewStatus).map(([value, label]) => ({ value, label }))} /></Form.Item>
+          <Form.Item name="interviewDate" label="面试时间"><DatePicker showTime className="full-width" /></Form.Item>
+          <Form.Item name="notes" label="跟进说明" extra="本次说明将同步到人员档案备注。"><Input.TextArea rows={3} maxLength={1000} showCount placeholder="联系结果、面试安排、需要协助的事项等" /></Form.Item>
+        </Form>
+      </Modal>
+    </RecruitmentWorkspace>
   );
 }
 
 export function RecruitmentProgressPage() {
-  return <PermissionGuard permission={Permission.JOB_READ}><RecruitmentProgressContent /></PermissionGuard>;
+  return <PermissionGuard permission={Permission.JOB_READ}><PermissionGuard permission={Permission.PEOPLE_READ}><RecruitmentProgressContent /></PermissionGuard></PermissionGuard>;
 }

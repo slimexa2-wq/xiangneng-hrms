@@ -15,7 +15,10 @@ export const Permission = {
   JOB_WRITE: "job:write",
   APPLICATION_CREATE: "application:create",
   REFERRAL_CREATE: "referral:create",
+  REWARD_READ: "reward:read",
   REWARD_REVIEW: "reward:review",
+  REWARD_APPROVE: "reward:approve",
+  REWARD_PAY: "reward:pay",
   SALARY_MANAGE: "salary:manage",
   SALARY_SELF_READ: "salary:self-read",
   CONTRACT_MANAGE: "contract:manage",
@@ -151,9 +154,12 @@ export const rolePermissions: Record<UserRoleValue, readonly Permission[]> = {
     Permission.SUPPLIER_WRITE,
     Permission.POLICY_READ,
     Permission.POLICY_WRITE,
+    Permission.REWARD_READ,
     Permission.REWARD_REVIEW
   ],
   [UserRole.FINANCE_REVIEWER]: [
+    Permission.REWARD_READ,
+    Permission.REWARD_APPROVE,
     Permission.DASHBOARD_READ,
     Permission.ORG_READ,
     Permission.REIMBURSEMENT_FINANCE_REVIEW,
@@ -161,6 +167,8 @@ export const rolePermissions: Record<UserRoleValue, readonly Permission[]> = {
     Permission.AUDIT_READ
   ],
   [UserRole.CASHIER]: [
+    Permission.REWARD_READ,
+    Permission.REWARD_PAY,
     Permission.DASHBOARD_READ,
     Permission.ORG_READ,
     Permission.REIMBURSEMENT_PAY,

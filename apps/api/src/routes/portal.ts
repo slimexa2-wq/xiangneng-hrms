@@ -27,6 +27,8 @@ import { auditScopeWhere } from "./audit.js";
 import { registerPerson } from "../services/registration.js";
 import { attachRecruitmentProgress } from "../services/recruitment-progress.js";
 import { offboardPerson, onboardPerson } from "../services/person-lifecycle.js";
+import { createReferralShare, resolveReferralShare } from "../services/referral-share.js";
+import { jobCategoryTerms } from "../services/job-offer.js";
 import {
   dateOnly,
   dateTime,
@@ -78,6 +80,7 @@ function isSupplierPortalRole(user: SessionUser): boolean {
 function portalAppealWhere(user: SessionUser): Prisma.PortalAppealWhereInput {
   if (
     user.role === UserRole.EMPLOYEE ||
+    user.role === UserRole.OUTSOURCED_EMPLOYEE ||
     user.role === UserRole.JOB_SEEKER ||
     isSupplierPortalRole(user)
   ) {
@@ -139,7 +142,7 @@ function portalAppealWhere(user: SessionUser): Prisma.PortalAppealWhereInput {
 }
 
 function portalJobWhere(user: SessionUser): Prisma.JobDemandWhereInput {
-  if (user.role === UserRole.EMPLOYEE || user.role === UserRole.JOB_SEEKER) {
+  if (user.role === UserRole.EMPLOYEE || user.role === UserRole.OUTSOURCED_EMPLOYEE || user.role === UserRole.JOB_SEEKER) {
     return { status: JobStatus.RECRUITING, deadline: { gte: new Date() } };
   }
   return { project: projectWhere(user) };
@@ -323,12 +326,14 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
           { workLocation: { contains: query.query, mode: "insensitive" } }
         ] : undefined
       }, regionLabel ? { OR: [
+        { city: { contains: regionLabel, mode: "insensitive" } },
         { project: { branch: { name: { contains: regionLabel, mode: "insensitive" } } } },
         { workLocation: { contains: regionLabel, mode: "insensitive" } }
-      ] } : {}, query.jobType ? { OR: [
-        { title: { contains: query.jobType, mode: "insensitive" } },
-        { project: { businessType: { contains: query.jobType, mode: "insensitive" } } }
-      ] } : {}),
+      ] } : {}, query.jobType ? { OR: jobCategoryTerms(query.jobType).flatMap((term) => [
+        { category: { contains: term, mode: "insensitive" as const } },
+        { title: { contains: term, mode: "insensitive" as const } },
+        { project: { businessType: { contains: term, mode: "insensitive" as const } } }
+      ]) } : {}),
       include: jobInclude,
       orderBy: [{ status: "asc" }, { deadline: "asc" }],
       take: 500
@@ -362,6 +367,9 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
       requirements: z.string().trim().min(1).max(5000),
       duties: z.string().trim().max(5000).optional(),
       benefits: z.string().trim().max(2000).optional(),
+      city: z.string().trim().max(64).optional(),
+      category: z.string().trim().max(64).optional(),
+      retentionDays: z.coerce.number().int().min(1).max(365).default(30),
       deadline: z.coerce.date(),
       status: z.string().default("recruiting"),
       supplierPolicy: z.string().trim().min(1).max(2000),
@@ -381,6 +389,7 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
       const referralPolicy = await tx.policy.create({ data: {
         name: `${input.title}-内部推荐政策`, type: PolicyType.EMPLOYEE_REFERRAL, projectId: input.projectId,
         employeeType: "普通员工", amount: policyAmount(input.referralPolicy), achievementConditions: input.referralPolicy,
+        retentionDays: input.retentionDays,
         effectiveAt: input.policyStart, expiresAt: input.policyEnd, notes: input.settlementCondition
       } });
       const created = await tx.jobDemand.create({ data: {
@@ -391,6 +400,8 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
         salary: `${input.salaryMin}-${input.salaryMax}元/月${input.benefits ? `；${input.benefits}` : ""}`,
         workTime: input.workTime,
         workLocation: allowed.remark ?? allowed.name,
+        city: input.city, category: input.category,
+        benefits: input.benefits ? input.benefits.split(/[、，,；;\n]/).map((value) => value.trim()).filter(Boolean) : [],
         deadline: input.deadline,
         status: jobStatus(input.status) ?? JobStatus.RECRUITING,
         supplierPolicyId: supplierPolicy.id,
@@ -417,6 +428,10 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
       deadline: z.coerce.date().optional(),
       workTime: z.string().trim().min(1).max(500).optional(),
       requirements: z.string().trim().min(1).max(5000).optional(),
+      city: z.string().trim().max(64).optional(),
+      category: z.string().trim().max(64).optional(),
+      benefits: z.string().trim().max(2000).optional(),
+      retentionDays: z.coerce.number().int().min(1).max(365).optional(),
       supplierPolicy: z.string().trim().min(1).max(2000).optional(),
       referralPolicy: z.string().trim().min(1).max(2000).optional(),
       settlementCondition: z.string().trim().min(1).max(2000).optional(),
@@ -429,7 +444,7 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
       : undefined;
     const updated = await app.prisma.$transaction(async (tx) => {
       if (patch.supplierPolicy && existing.supplierPolicyId) await tx.policy.update({ where: { id: existing.supplierPolicyId }, data: { achievementConditions: patch.supplierPolicy, notes: patch.settlementCondition } });
-      if (patch.referralPolicy && existing.referralPolicyId) await tx.policy.update({ where: { id: existing.referralPolicyId }, data: { achievementConditions: patch.referralPolicy, notes: patch.settlementCondition } });
+      if ((patch.referralPolicy || patch.retentionDays !== undefined) && existing.referralPolicyId) await tx.policy.update({ where: { id: existing.referralPolicyId }, data: { achievementConditions: patch.referralPolicy, retentionDays: patch.retentionDays, notes: patch.settlementCondition, version: { increment: 1 } } });
       const job = await tx.jobDemand.update({ where: { id }, data: {
         title: patch.title,
         requiredCount: patch.headcount,
@@ -437,6 +452,8 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
         deadline: patch.deadline,
         workTime: patch.workTime,
         requirements: patch.requirements,
+        city: patch.city, category: patch.category,
+        benefits: patch.benefits === undefined ? undefined : patch.benefits.split(/[、，,；;\n]/).map((value) => value.trim()).filter(Boolean),
         status: jobStatus(patch.status)
       }, include: jobInclude });
       await writeAudit(tx, request, { action: "PORTAL_JOB_UPDATE", resourceType: "JobDemand", resourceId: id, before: { title: existing.title, status: existing.status, requiredCount: existing.requiredCount }, after: { title: job.title, status: job.status, requiredCount: job.requiredCount } });
@@ -514,6 +531,9 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
       await app.prisma.$transaction(async (tx) => {
         const before = await tx.person.findFirst({ where: andWhere(personWhere(user), { id }) });
         if (!before) notFound("人员档案");
+        if (before.status === EmploymentStatus.ACTIVE || before.status === EmploymentStatus.LEFT) {
+          throw new AppError(409, "PERSON_EMPLOYMENT_LOCKED", "已入职或已离职人员必须通过入离职流程更新状态");
+        }
         const updated = await tx.person.update({ where: { id }, data: { status: target.status, interviewStatus: target.interviewStatus, notes: input.note ?? undefined } });
         const application = await tx.application.findFirst({ where: { personId: id }, orderBy: { appliedAt: "desc" } });
         if (application) await tx.application.update({ where: { id: application.id }, data: { employmentStatus: target.status, interviewStatus: target.interviewStatus } });
@@ -544,18 +564,38 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send(mapPortalPerson(person));
   });
 
+  app.get("/portal/my-applications", { preHandler: [app.authenticate] }, async (request) => {
+    const user = getSession(request);
+    if (!user.personId) return [];
+    const rows = await app.prisma.application.findMany({
+      where: { personId: user.personId },
+      include: { jobDemand: { include: { project: { select: { name: true } } } } },
+      orderBy: { appliedAt: "desc" }, take: 200
+    });
+    return rows.map((item) => ({
+      id: item.id, jobId: item.jobDemandId, jobTitle: item.jobDemand.title,
+      projectName: item.jobDemand.project.name,
+      status: portalPersonStatus(item.employmentStatus, item.interviewStatus),
+      appliedAt: dateTime(item.appliedAt), interviewAt: dateOnly(item.interviewDate), onboardDate: dateOnly(item.onboardDate)
+    }));
+  });
+
   app.post("/portal/jobs/:id/apply", { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = getSession(request);
     requirePermission(user, Permission.APPLICATION_CREATE);
-    if (!user.personId) throw new AppError(409, "PERSON_PROFILE_REQUIRED", "当前演示身份尚未绑定人员档案");
+    if (!user.personId) throw new AppError(409, "PERSON_PROFILE_REQUIRED", "请先绑定本人求职档案后报名");
     const { id } = z.object({ id: uuidSchema }).parse(request.params);
+    const input = z.object({ consent: z.literal(true).optional(), referralToken: z.string().trim().min(16).max(32).optional() }).parse(request.body ?? {});
     const job = await app.prisma.jobDemand.findFirst({ where: andWhere(portalJobWhere(user), { id, status: JobStatus.RECRUITING }) });
     if (!job) notFound("招聘岗位");
-    const latest = await app.prisma.application.findFirst({ where: { personId: user.personId, jobDemandId: id }, orderBy: { appliedAt: "desc" } });
-    if (!latest || latest.employmentStatus === EmploymentStatus.LEFT) {
-      await app.prisma.application.create({ data: { personId: user.personId, jobDemandId: id, source: ApplicationSource.SELF } });
-    }
-    return reply.status(201).send({ ok: true });
+    const person = await app.prisma.person.findUnique({ where: { id: user.personId } });
+    if (!person) notFound("本人求职档案");
+    const share = input.referralToken ? await resolveReferralShare(app.prisma, input.referralToken, id) : null;
+    const result = await registerPerson(app.prisma, app.config, request, personRegistrationSchema.parse({
+      name: person.name, phone: person.phone, idCard: person.idCard, projectId: job.projectId,
+      jobDemandId: job.id, jobTitle: job.title, source: ApplicationSource.SELF, consent: input.consent
+    }), user, share?.recommenderUserId);
+    return reply.status(result.deduplicated ? 200 : 201).send({ ok: true });
   });
 
   app.get("/portal/favorites", { preHandler: [app.authenticate] }, async (request) => {
@@ -601,10 +641,10 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/portal/referrals", { preHandler: [app.authenticate] }, async (request) => {
     const user = getSession(request);
-    const records = await app.prisma.referralRecord.findMany({ where: { recommenderUserId: user.id }, include: { person: true, jobDemand: { include: { project: true } }, reward: true }, orderBy: { createdAt: "desc" } });
+    const records = await app.prisma.referralRecord.findMany({ where: { recommenderUserId: user.id }, include: { person: true, application: true, jobDemand: { include: { project: true } }, reward: true }, orderBy: { createdAt: "desc" } });
     return records.map((item) => ({
       id: item.id,
-      status: portalPersonStatus(item.person.status, item.person.interviewStatus),
+      status: portalPersonStatus(item.application.employmentStatus, item.application.interviewStatus),
       reward: amount(item.reward?.amount),
       rewardStatus: item.reward?.status?.toLowerCase() ?? "pending",
       createdAt: dateTime(item.createdAt),
@@ -612,8 +652,18 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
       phone: item.person.phone,
       jobTitle: item.jobDemand.title,
       projectName: item.jobDemand.project.name,
-      onboardDate: dateOnly(item.person.onboardDate)
+      onboardDate: dateOnly(item.application.onboardDate)
     }));
+  });
+
+  app.post("/portal/referrals/share-token", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = getSession(request);
+    requirePermission(user, Permission.REFERRAL_CREATE);
+    const { jobDemandId } = z.object({ jobDemandId: uuidSchema }).parse(request.body);
+    const share = await createReferralShare(app.prisma, { jobDemandId, recommenderUserId: user.id });
+    return reply.status(201).send({ token: share.token, jobDemandId: share.jobDemandId, expiresAt: share.expiresAt,
+      path: `/pages/jobs/detail/index?id=${share.jobDemandId}&ref=${share.token}`,
+      portalPath: `/jobs/${share.jobDemandId}?ref=${share.token}` });
   });
 
   app.post("/portal/referrals", { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -648,7 +698,7 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/portal/advances", { preHandler: [app.authenticate] }, async (request) => {
     const user = getSession(request);
-    const own = user.role === UserRole.EMPLOYEE || user.role === UserRole.JOB_SEEKER;
+    const own = user.role === UserRole.EMPLOYEE || user.role === UserRole.OUTSOURCED_EMPLOYEE || user.role === UserRole.JOB_SEEKER;
     const rows = await app.prisma.portalAdvance.findMany({ where: own ? { creatorUserId: user.id } : { status: { in: ["submitted", "processing"] }, person: personWhere(user) }, include: { person: true }, orderBy: { createdAt: "desc" } });
     return rows.map((item) => ({ id: item.id, name: item.person.name, phone: item.person.phone, amount: amount(item.amount), reason: item.reason, status: item.status, reply: item.reply, created_at: dateTime(item.createdAt) }));
   });

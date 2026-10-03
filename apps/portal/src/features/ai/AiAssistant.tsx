@@ -4,12 +4,12 @@ import {
   LoaderCircle, MessageSquareText, RotateCcw, Send, Sparkles, UserRound, UserRoundCheck, UserRoundX, X
 } from 'lucide-react';
 import { handlePortalDemoRequest } from '../../app/demo';
+import { demoFallbackEnabled } from '../../app/api';
 
 type JsonObject = Record<string, any>;
 type ChatItem = { id: string; role: 'assistant' | 'user'; text: string; payload?: JsonObject };
 
 const coreBase = (import.meta.env.VITE_CORE_API_URL as string | undefined) ?? '/api';
-const demoFallbackEnabled = (import.meta.env.VITE_PORTAL_DEMO_FALLBACK as string | undefined) !== 'false';
 let tokenPromise: Promise<string> | null = null;
 
 async function coreRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -42,6 +42,7 @@ async function coreRequest<T>(path: string, init: RequestInit = {}): Promise<T> 
 async function ensureDemoToken(): Promise<string> {
   const existing = sessionStorage.getItem('xiangneng_core_token');
   if (existing) return existing;
+  if (!demoFallbackEnabled) throw new Error('请先登录 HRMS，再使用业务助手。');
   if (!tokenPromise) {
     tokenPromise = fetch(`${coreBase}/auth/demo-login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ persona: 'operator' })

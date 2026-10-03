@@ -17,15 +17,17 @@ export function TextField({
   placeholder,
   type = "text",
   onChange,
-  maxlength = 120
+  maxlength = 120,
+  password = false
 }: {
   value: string;
   placeholder: string;
   type?: "text" | "number" | "idcard";
   onChange: (value: string) => void;
   maxlength?: number;
+  password?: boolean;
 }) {
-  return <Input className="form-control" value={value} placeholder={placeholder} type={type} maxlength={maxlength} onInput={(event) => onChange(event.detail.value)} />;
+  return <Input className="form-control" value={value} placeholder={placeholder} type={type} password={password} maxlength={maxlength} onInput={(event) => onChange(event.detail.value)} />;
 }
 
 export function TextAreaField({

@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-03T06:09:41.216Z",
+  "mainFlowChecks": 33,
+  "accountChecks": 6,
+  "viewportChecks": [
+    {
+      "width": 320,
+      "height": 740,
+      "documentWidth": 320,
+      "actionBottom": 756.234375,
+      "navigationTop": 662
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "documentWidth": 375,
+      "actionBottom": 726.234375,
+      "navigationTop": 734
+    },
+    {
+      "name": "profile child page keeps My navigation selected"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "documentWidth": 390,
+      "actionBottom": 726.234375,
+      "navigationTop": 766
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "documentWidth": 430,
+      "actionBottom": 726.234375,
+      "navigationTop": 854
+    }
+  ],
+  "javascriptErrors": [],
+  "nativeTests": 35,
+  "portalTests": 16,
+  "adminTests": 35,
+  "nativePages": 22,
+  "builds": [
+    "miniapp/weapp",
+    "portal",
+    "admin"
+  ],
+  "dataset": "explicit synthetic browser demo",
+  "nativeRuntime": "compiled developer preview; real WeChat credentials and device run pending"
+}

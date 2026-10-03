@@ -63,6 +63,7 @@ export const personRegistrationSchema = z.object({
   emergencyContactPhone: optionalText(32),
   emergencyContactRelation: optionalText(32),
   source: z.nativeEnum(ApplicationSource).default(ApplicationSource.OPERATOR),
+  consent: z.literal(true).optional(),
   notes: optionalText(2000)
 });
 
@@ -119,6 +120,7 @@ export const policySchema = z.object({
   supplierLevel: optionalText(32),
   employeeType: optionalText(64),
   amount: z.coerce.number().nonnegative(),
+  retentionDays: z.coerce.number().int().min(1).max(365).default(30),
   achievementConditions: z.string().trim().min(1).max(2000),
   exclusionConditions: optionalText(2000),
   effectiveAt: dateInputSchema,
@@ -134,6 +136,9 @@ export const jobDemandSchema = z.object({
   salary: z.string().trim().min(1).max(500),
   workTime: z.string().trim().min(1).max(500),
   workLocation: z.string().trim().min(1).max(500),
+  city: optionalText(64),
+  category: optionalText(64),
+  benefits: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   deadline: dateInputSchema,
   status: z.nativeEnum(JobStatus).default(JobStatus.RECRUITING),
   supplierPolicyId: idSchema.optional().nullable(),
@@ -147,7 +152,12 @@ export const applicationSchema = personRegistrationSchema.extend({
 
 export const rewardUpdateSchema = z.object({
   status: z.nativeEnum(RewardStatus),
-  notes: optionalText(1000)
+  notes: optionalText(1000),
+  payment: z.object({
+    reference: z.string().trim().min(1).max(120),
+    proof: z.string().trim().min(4).max(1000),
+    paidAt: z.union([z.string().datetime({ offset: true }), z.date()]).pipe(dateInputSchema)
+  }).optional()
 });
 
 export const salarySlipRowSchema = z.object({

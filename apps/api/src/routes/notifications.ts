@@ -1,8 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { randomBytes } from "node:crypto";
+import { hash } from "bcryptjs";
 import { z } from "zod";
 import {
   Permission,
   NotificationStatus,
+  UserRole,
   idSchema
 } from "@xiangneng/shared";
 import { AppError, notFound } from "../errors.js";
@@ -13,6 +16,10 @@ import { createReferralShare } from "../services/referral-share.js";
 import { sessionUserInclude, toSessionUser } from "../session-user.js";
 
 const wxCodeSchema = z.object({ code: z.string().trim().min(1).max(256) });
+const wechatLoginRateLimit = {
+  max: 10, timeWindow: "1 minute",
+  errorResponseBuilder: () => new AppError(429, "RATE_LIMITED", "登录尝试过于频繁，请稍后再试")
+};
 
 type WechatSessionResponse = {
   openid?: string;
@@ -34,52 +41,92 @@ async function exchangeWechatCode(app: FastifyInstance, code: string): Promise<{
   });
   let response: Response;
   try {
-    response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${query.toString()}`);
+    response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${query.toString()}`, { signal: AbortSignal.timeout(8000) });
   } catch {
     throw new AppError(502, "WECHAT_UPSTREAM_UNAVAILABLE", "微信登录服务暂时不可用");
   }
-  const payload = await response.json() as WechatSessionResponse;
-  if (!response.ok || payload.errcode || !payload.openid) {
-    throw new AppError(502, "WECHAT_AUTH_FAILED", "微信登录凭证校验失败", {
-      errcode: payload.errcode,
-      errmsg: payload.errmsg
-    });
+  let payload: WechatSessionResponse;
+  try {
+    const parsed: unknown = await response.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid WeChat response");
+    payload = parsed as WechatSessionResponse;
+  } catch {
+    throw new AppError(502, "WECHAT_AUTH_FAILED", "微信登录凭证校验失败");
+  }
+  if (!response.ok || payload.errcode || typeof payload.openid !== "string" || !payload.openid.trim() || payload.openid.length > 128) {
+    throw new AppError(502, "WECHAT_AUTH_FAILED", "微信登录凭证校验失败");
   }
   // session_key 仅在微信服务端响应内存在：不返回前端、不入库、不写日志。
-  return { openId: payload.openid, unionId: payload.unionid };
+  return { openId: payload.openid, unionId: typeof payload.unionid === "string" && payload.unionid.length <= 128 ? payload.unionid : undefined };
 }
 
 export async function notificationRoutes(app: FastifyInstance): Promise<void> {
   const loginWithWechat = async (request: FastifyRequest) => {
     const input = wxCodeSchema.parse(request.body);
     const identity = await exchangeWechatCode(app, input.code);
-    const user = await app.prisma.user.findUnique({
-      where: { wechatMiniappOpenId: identity.openId },
-      include: sessionUserInclude
+    const user = await app.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"wechat-login:" + identity.openId}))`;
+      const existing = await tx.user.findUnique({ where: { wechatMiniappOpenId: identity.openId }, include: sessionUserInclude });
+      if (existing && !existing.isActive) throw new AppError(401, "ACCOUNT_DISABLED", "该账号已停用，请联系服务人员核实");
+      const account = existing ?? await tx.user.upsert({
+        where: { wechatMiniappOpenId: identity.openId }, update: {},
+        create: {
+          username: `wx_${randomBytes(20).toString("hex")}`,
+          passwordHash: await hash(randomBytes(32).toString("hex"), 12),
+          displayName: "微信求职者", role: UserRole.JOB_SEEKER,
+          branchId: null, supplierId: null, personId: null,
+          wechatMiniappOpenId: identity.openId, wechatUnionId: identity.unionId
+        },
+        include: sessionUserInclude
+      });
+      // Concurrent first logins may return an account created or disabled by
+      // another transaction. Never reactivate it or change an existing role.
+      if (!account.isActive) throw new AppError(401, "ACCOUNT_DISABLED", "该账号已停用，请联系服务人员核实");
+      request.sessionUser = toSessionUser(account);
+      await writeAudit(tx, request, { action: "AUTH_WECHAT_LOGIN_SUCCEEDED", resourceType: "User", resourceId: account.id,
+        after: { firstLogin: !existing, role: account.role } });
+      return account;
     });
-    if (!user || !user.isActive) {
-      throw new AppError(409, "WECHAT_NOT_BOUND", "该微信身份尚未绑定系统账号，请先使用账号密码登录后绑定");
-    }
     const sessionUser = toSessionUser(user);
     const token = app.jwt.sign({ sub: user.id, tokenVersion: user.tokenVersion });
     return success(request, { token, user: sessionUser });
   };
-  app.post("/wechat/auth/login", loginWithWechat);
-  app.post("/wechat/auth", loginWithWechat);
+  app.post("/wechat/auth/login", { config: { rateLimit: wechatLoginRateLimit } }, loginWithWechat);
+  app.post("/wechat/auth", { config: { rateLimit: wechatLoginRateLimit } }, loginWithWechat);
 
   app.post("/wechat/bind", { preHandler: [app.authenticate] }, async (request) => {
     const input = wxCodeSchema.parse(request.body);
     const identity = await exchangeWechatCode(app, input.code);
     const user = getSession(request);
-    await app.prisma.user.update({
-      where: { id: user.id },
-      data: { wechatMiniappOpenId: identity.openId, wechatUnionId: identity.unionId }
-    });
-    await writeAudit(app.prisma, request, {
-      action: "WECHAT_MINIAPP_BIND",
-      resourceType: "User",
-      resourceId: user.id,
-      after: { bound: true, unionIdPresent: Boolean(identity.unionId) }
+    await app.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"wechat-login:" + identity.openId}))`;
+      const current = await tx.user.findUnique({ where: { id: user.id }, include: sessionUserInclude });
+      if (!current?.isActive || current.tokenVersion !== request.user.tokenVersion) {
+        throw new AppError(401, "UNAUTHORIZED", "账号登录状态已变化，请重新登录");
+      }
+      request.sessionUser = toSessionUser(current);
+      const owner = await tx.user.findUnique({ where: { wechatMiniappOpenId: identity.openId }, include: {
+        projectLinks: true, roleAssignments: true, dataScopeBindings: true, internalEmployee: { select: { id: true } }
+      } });
+      let transferredTemporaryAccount = false;
+      if (owner && owner.id !== user.id) {
+        const temporary = owner.isActive && owner.role === UserRole.JOB_SEEKER && /^wx_[a-f0-9]{40}$/.test(owner.username)
+          && !owner.personId && !owner.branchId && !owner.supplierId && !owner.internalEmployee
+          && !owner.projectLinks.length && !owner.roleAssignments.length && !owner.dataScopeBindings.length;
+        if (!temporary) throw new AppError(409, "WECHAT_ALREADY_BOUND", "该微信已绑定其他人员账号，请联系服务人员核实；现有绑定未变更");
+        const released = await tx.user.updateMany({ where: {
+          id: owner.id, role: UserRole.JOB_SEEKER, personId: null, branchId: null, supplierId: null, isActive: true,
+          wechatMiniappOpenId: identity.openId, tokenVersion: owner.tokenVersion,
+          projectLinks: { none: {} }, roleAssignments: { none: {} }, dataScopeBindings: { none: {} }, internalEmployee: { is: null }
+        }, data: { wechatMiniappOpenId: null, wechatUnionId: null, isActive: false, tokenVersion: { increment: 1 } } });
+        if (released.count !== 1) throw new AppError(409, "WECHAT_BINDING_CONFLICT", "微信绑定状态已变化，请刷新后重试");
+        transferredTemporaryAccount = true;
+        await writeAudit(tx, request, { action: "WECHAT_TEMPORARY_ACCOUNT_RELEASED", resourceType: "User", resourceId: owner.id,
+          after: { isActive: false, reason: "LINKED_TO_AUTHENTICATED_HRMS_ACCOUNT" } });
+      }
+      await tx.user.update({ where: { id: user.id }, data: { wechatMiniappOpenId: identity.openId, wechatUnionId: identity.unionId } });
+      await writeAudit(tx, request, { action: "WECHAT_MINIAPP_BIND", resourceType: "User", resourceId: user.id,
+        after: { bound: true, unionIdPresent: Boolean(identity.unionId), transferredTemporaryAccount } });
     });
     return success(request, { bound: true });
   });

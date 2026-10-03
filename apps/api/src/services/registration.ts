@@ -29,9 +29,12 @@ function bindSource(input: PersonRegistrationInput, user: SessionUser | null, tr
   if (!user) return { ...input, source: ApplicationSource.SELF, supplierId: null, recommenderUserId: null };
   switch (user.role) {
     case UserRole.SUPPLIER:
+    case UserRole.SUPPLIER_ADMIN:
       if (!user.supplierId) throw new AppError(400, "SUPPLIER_BINDING_REQUIRED", "供应商账号未绑定供应商");
       return { ...input, source: ApplicationSource.SUPPLIER, supplierId: user.supplierId, recommenderUserId: null };
     case UserRole.EMPLOYEE:
+    case UserRole.OUTSOURCED_EMPLOYEE:
+      if (input.source === ApplicationSource.SELF) return { ...input, supplierId: null, recommenderUserId: null };
       return { ...input, source: ApplicationSource.REFERRAL, supplierId: null, recommenderUserId: user.id };
     case UserRole.JOB_SEEKER:
       return { ...input, source: ApplicationSource.SELF, supplierId: null, recommenderUserId: null };
@@ -69,6 +72,17 @@ export async function registerPerson(
   assertSourceSubject(bound);
   const idCard = normalizeIdCard(bound.idCard);
   const result = await prisma.$transaction(async (tx) => {
+    // Serialize registrations for the same identity, including concurrent public
+    // requests, so referral attribution and the person master cannot race.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${idCard}))`;
+    let currentPersonId = user?.personId ?? null;
+    if (user?.role === UserRole.JOB_SEEKER) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"registration-user:" + user.id}))`;
+      const account = await tx.user.findUnique({ where: { id: user.id }, select: { id: true, isActive: true, personId: true, role: true } });
+      if (!account?.isActive) throw new AppError(401, "ACCOUNT_DISABLED", "该账号已停用，请联系服务人员核实");
+      if (account.role !== UserRole.JOB_SEEKER) throw new AppError(409, "ACCOUNT_STATE_CHANGED", "账号身份已变化，请刷新登录后继续");
+      currentPersonId = account.personId;
+    }
     const job = bound.jobDemandId
       ? await tx.jobDemand.findUnique({
           where: { id: bound.jobDemandId },
@@ -82,7 +96,7 @@ export async function registerPerson(
     if (job && bound.projectId !== job.projectId) {
       throw new AppError(400, "PROJECT_JOB_MISMATCH", "报名项目与招聘需求所属项目不一致");
     }
-    if (user && (user.role === UserRole.BRANCH_MANAGER || user.role === UserRole.PROJECT_OPERATOR || user.role === UserRole.SUPPLIER)) {
+    if (user && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.OUTSOURCED_EMPLOYEE && user.role !== UserRole.JOB_SEEKER) {
       const allowedProject = await tx.project.findFirst({ where: { AND: [projectWhere(user), { id: bound.projectId }] }, select: { id: true } });
       if (!allowedProject) throw new AppError(403, "OUT_OF_SCOPE", "不能为未授权项目登记人员");
     }
@@ -94,16 +108,39 @@ export async function registerPerson(
       });
       if (!projectLink) throw new AppError(403, "SUPPLIER_PROJECT_OUT_OF_SCOPE", "供应商未关联该项目，不能报送人员");
     }
+    let recommender = null;
     if (bound.recommenderUserId) {
-      const recommender = await tx.user.findUnique({ where: { id: bound.recommenderUserId }, select: { id: true, isActive: true } });
+      recommender = await tx.user.findUnique({ where: { id: bound.recommenderUserId }, select: {
+        id: true, isActive: true, employeeType: true, personId: true,
+        person: { select: { idCard: true } }, internalEmployee: { select: { idCard: true } }
+      } });
       if (!recommender?.isActive) throw new AppError(400, "INVALID_RECOMMENDER", "推荐人不存在或已停用");
+      if (normalizeIdCard(recommender.person?.idCard ?? recommender.internalEmployee?.idCard ?? "") === idCard) {
+        throw new AppError(409, "SELF_REFERRAL_NOT_ALLOWED", "本人报名不能作为推荐领取奖励");
+      }
     }
     const existing = await tx.person.findUnique({ where: { idCard } });
-    const preserveExistingPublicProfile = !user && Boolean(existing);
-    if (user?.role === UserRole.JOB_SEEKER && user.personId && existing?.id !== user.personId) {
-      throw new AppError(403, "PERSON_IDENTITY_MISMATCH", "求职者账号只能使用本人已绑定的人员身份报名");
+    if (recommender?.personId && recommender.personId === existing?.id) {
+      throw new AppError(409, "SELF_REFERRAL_NOT_ALLOWED", "本人报名不能作为推荐领取奖励");
     }
-    if (user?.role === UserRole.SUPPLIER && existing?.supplierId && existing.supplierId !== user.supplierId) {
+    const existingReferral = existing && job
+      ? await tx.referralRecord.findUnique({ where: { personId_jobDemandId: { personId: existing.id, jobDemandId: job.id } } })
+      : null;
+    if (bound.recommenderUserId && existingReferral && existingReferral.recommenderUserId !== bound.recommenderUserId) {
+      throw new AppError(409, "REFERRER_ALREADY_BOUND", "该人员在此岗位已绑定推荐人，不能重复计奖或更换推荐人");
+    }
+    const preserveExistingPublicProfile = !user && Boolean(existing);
+    const firstSelfProfile = user?.role === UserRole.JOB_SEEKER && !currentPersonId && !existing && Boolean(job)
+      && (bound.source === ApplicationSource.SELF || Boolean(trustedReferralUserId));
+    if (user?.role === UserRole.JOB_SEEKER && !firstSelfProfile && (!currentPersonId || existing?.id !== currentPersonId)) {
+      throw new AppError(403, "PERSON_IDENTITY_MISMATCH", "已有人员档案需要服务人员核实绑定，不能凭身份证直接认领或报名他人身份");
+    }
+    if (bound.source === ApplicationSource.SELF && user
+      && (user.role === UserRole.EMPLOYEE || user.role === UserRole.OUTSOURCED_EMPLOYEE)
+      && (!user.personId || existing?.id !== user.personId)) {
+      throw new AppError(403, "PERSON_IDENTITY_MISMATCH", "本人自主报名只能使用当前账号绑定的人员身份");
+    }
+    if (user && (user.role === UserRole.SUPPLIER || user.role === UserRole.SUPPLIER_ADMIN) && existing?.supplierId && existing.supplierId !== user.supplierId) {
       throw new AppError(409, "PERSON_OWNED_BY_OTHER_SUPPLIER", "该人员已归属其他供应商，不能跨供应商覆盖档案");
     }
     const shouldRestart = existing?.status === EmploymentStatus.LEFT && !preserveExistingPublicProfile;
@@ -156,6 +193,16 @@ export async function registerPerson(
           }
         });
 
+    if (firstSelfProfile && user) {
+      const binding = await tx.user.updateMany({
+        where: { id: user.id, personId: null, isActive: true, role: UserRole.JOB_SEEKER },
+        data: { personId: person.id, displayName: person.name }
+      });
+      if (binding.count !== 1) throw new AppError(409, "PERSON_BINDING_CONFLICT", "本人档案已被其他请求绑定，请刷新登录后重试");
+      await writeAudit(tx, request, { action: "JOB_SEEKER_PROFILE_CREATED", resourceType: "User", resourceId: user.id,
+        after: { personId: person.id, consentConfirmed: bound.consent === true } });
+    }
+
     if (!existing || shouldRestart) {
       await tx.personStatusLog.create({
         data: {
@@ -203,20 +250,19 @@ export async function registerPerson(
           }
         });
       }
-      if (bound.source === ApplicationSource.REFERRAL && bound.recommenderUserId) {
+      if (bound.source === ApplicationSource.REFERRAL && bound.recommenderUserId && !existingReferral) {
         const policy = job.referralPolicy;
         if (policy && policy.type !== PolicyType.EMPLOYEE_REFERRAL) {
           throw new AppError(400, "INVALID_REFERRAL_POLICY", "招聘需求绑定的不是内部推荐政策");
         }
         if (policy) {
-          const recommender = await tx.user.findUnique({ where: { id: bound.recommenderUserId }, select: { employeeType: true } });
           const employeeType = recommender?.employeeType ?? "普通员工";
           const now = new Date();
-          if (!policy.isActive || policy.effectiveAt > now || (policy.expiresAt && policy.expiresAt < now) || policy.employeeType !== employeeType) {
+          if (!policy.isActive || policy.effectiveAt > now || (policy.expiresAt && policy.expiresAt.getTime() + 86_400_000 <= now.getTime()) || policy.employeeType !== employeeType) {
             throw new AppError(409, "REFERRAL_POLICY_NOT_APPLICABLE", "该岗位绑定的内部推荐政策不适用于当前推荐人或已失效");
           }
         }
-        const referral = await tx.referralRecord.upsert({
+        await tx.referralRecord.upsert({
           where: { applicationId: application.id },
           create: {
             applicationId: application.id,
@@ -229,6 +275,7 @@ export async function registerPerson(
               name: policy.name,
               version: policy.version,
               amount: policy.amount.toString(),
+              retentionDays: policy.retentionDays,
               achievementConditions: policy.achievementConditions,
               exclusionConditions: policy.exclusionConditions,
               effectiveAt: policy.effectiveAt.toISOString(),
@@ -241,13 +288,6 @@ export async function registerPerson(
           },
           update: {}
         });
-        if (policy) {
-          await tx.referralReward.upsert({
-            where: { referralId: referral.id },
-            create: { referralId: referral.id, policyId: policy.id, amount: policy.amount },
-            update: {}
-          });
-        }
       }
     }
     await writeAudit(tx, request, {
@@ -255,7 +295,7 @@ export async function registerPerson(
       resourceType: "Person",
       resourceId: person.id,
       before: existing ? { status: existing.status, projectId: existing.projectId } : undefined,
-      after: { status: person.status, projectId: person.projectId, source: bound.source }
+      after: { status: person.status, projectId: person.projectId, source: bound.source, consentConfirmed: bound.consent === true }
     });
     await createKeyNotifications(tx, config, {
       personId: person.id,

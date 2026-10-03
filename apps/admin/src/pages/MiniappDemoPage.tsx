@@ -69,13 +69,13 @@ export function MiniappDemoPage() {
     <section className="real-miniapp-heading">
       <div>
         <Space size={10} wrap>
-          <Tag color="blue">同源数据</Tag>
-          <Tag color="green">真实可交互</Tag>
-          <Tag color="purple">手机端 390×844</Tag>
+          <Tag>好工到 · HRMS</Tag>
+          <Tag>界面体验</Tag>
+          <Tag>手机版</Tag>
         </Space>
-        <Typography.Title level={2}>真实小程序演示</Typography.Title>
+        <Typography.Title level={2}>小程序界面体验</Typography.Title>
         <Typography.Paragraph>
-          此处直接运行祥能小程序，不再维护第二套静态演示。身份切换、岗位详情、人员状态、结算和 AI 入口均连接同一套 API 与 PostgreSQL 数据。
+          体验好工到找工作、报名与推荐，以及原有员工和运营服务。这里展示手机版网页；原生微信小程序通过微信开发者工具预览。
         </Typography.Paragraph>
       </div>
       <Space>
@@ -97,7 +97,7 @@ export function MiniappDemoPage() {
         <Card title={current.label} variant="borderless">
           <ul className="real-miniapp-checklist">{current.highlights.map((item) => <li key={item}><SafetyCertificateOutlined />{item}</li>)}</ul>
         </Card>
-        <Alert type="info" showIcon title="演示说明" description="小程序中的手机号、身份证号和联系人信息按当前演示账号的数据权限完整显示；跨项目、跨供应商数据仍由后端权限拦截。" />
+        <Alert type="info" showIcon title="演示说明" description="演示账号只用于体验。求职报名、推荐奖励和人员状态的实际结果以 HRMS 后台记录为准；合成演示不向真实企业提交资料。" />
       </aside>
 
       <section className="real-miniapp-stage" aria-label={`${current.label}手机界面`}>

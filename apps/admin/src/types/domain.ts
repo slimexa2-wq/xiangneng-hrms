@@ -203,6 +203,8 @@ export type Policy = {
   supplierLevel?: Nullable<string>;
   employeeType?: Nullable<string>;
   amount: number | string;
+  version?: number;
+  retentionDays?: number;
   achievementConditions: string;
   exclusionConditions?: Nullable<string>;
   effectiveAt: string;
@@ -296,6 +298,9 @@ export type JobDemand = {
   salary: string;
   workTime: string;
   workLocation: string;
+  city?: Nullable<string>;
+  category?: Nullable<string>;
+  benefits?: string[];
   deadline: string;
   status: JobStatus;
   supplierPolicyId?: Nullable<string>;
@@ -347,9 +352,14 @@ export type ReferralReward = {
   status: RewardStatus;
   notes?: Nullable<string>;
   achievedAt?: Nullable<string>;
+  approvedAt?: Nullable<string>;
   paidAt?: Nullable<string>;
+  eligibility?: { eligible: boolean; retentionDays: number | null; eligibleAt?: Nullable<string>; reason: string };
+  payment?: Nullable<{ reference: string; proof: string; paidAt: string }>;
   createdAt: string;
   referral?: {
+    application?: { employmentStatus?: EmploymentStatus; onboardDate?: Nullable<string>; offboardDate?: Nullable<string> };
+    policySnapshot?: { name?: string; version?: number; retentionDays?: number; achievementConditions?: string; exclusionConditions?: Nullable<string> };
     person?: Nullable<Person>;
     recommender?: Nullable<{ displayName?: string; username?: string }>;
     jobDemand?: Nullable<JobDemand>;

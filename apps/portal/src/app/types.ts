@@ -8,6 +8,7 @@ export interface Session {
   supplierId?: string;
   personId?: string;
   personStatus?: string;
+  permissions?: string[];
 }
 
 export interface Job {
@@ -41,6 +42,10 @@ export interface Job {
   imageUrl: string;
   appliedCount: number;
   completedCount: number;
+  salaryText?: string;
+  referral_reward?: number;
+  referral_retention_days?: number;
+  referral_exclusions?: string;
 }
 
 export interface Person {

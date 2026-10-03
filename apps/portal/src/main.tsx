@@ -10,6 +10,7 @@ import './styles/personal.css';
 import './styles/internal.css';
 import './styles/supplier.css';
 import './styles/ai-assistant.css';
+import './styles/bluecollar.css';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 15_000, refetchOnWindowFocus: false }, mutations: { retry: false } }

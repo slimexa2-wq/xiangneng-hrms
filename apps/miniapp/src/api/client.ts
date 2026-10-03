@@ -1,10 +1,10 @@
 import Taro from "@tarojs/taro";
 import { runtimeConfig } from "../config/runtime";
-import { clearSession, getAccessToken } from "../auth/session";
+import { clearSessionIfCurrent, getSessionSnapshot } from "../auth/session";
 import type { ApiFailure, ApiSuccess } from "./types";
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-type RequestOptions = { method?: HttpMethod; data?: unknown; authenticated?: boolean };
+type RequestOptions = { method?: HttpMethod; data?: unknown; authenticated?: boolean; rawSuccess?: boolean };
 
 export class ApiError extends Error {
   constructor(
@@ -28,6 +28,17 @@ function isApiFailure(value: unknown): value is ApiFailure {
   );
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function responseData<T>(value: unknown, status: number, rawSuccess = false): T {
+  if (isObject(value) && (rawSuccess ? value.ok === true : Object.prototype.hasOwnProperty.call(value, "data"))) {
+    return (rawSuccess ? undefined : value.data) as T;
+  }
+  throw new ApiError("服务返回了无法识别的数据，请稍后重试", "INVALID_RESPONSE", status);
+}
+
 export function queryString(params: Record<string, unknown>): string {
   const parts = Object.entries(params)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
@@ -39,7 +50,8 @@ export function queryString(params: Record<string, unknown>): string {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const token = getAccessToken();
+  const session = getSessionSnapshot();
+  const token = session.token;
   const authenticated = options.authenticated !== false;
   if (authenticated && !token) {
     throw new ApiError("登录已失效，请重新登录", "AUTH_REQUIRED", 401);
@@ -58,9 +70,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       }
     });
 
-    if (response.statusCode === 401) {
-      clearSession();
-    }
+    if (authenticated && response.statusCode === 401) clearSessionIfCurrent(session);
     if (response.statusCode < 200 || response.statusCode >= 300 || isApiFailure(response.data)) {
       const failure = isApiFailure(response.data) ? response.data : undefined;
       throw new ApiError(
@@ -72,7 +82,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       );
     }
 
-    return (response.data as ApiSuccess<T>).data;
+    return responseData<T>(response.data, response.statusCode, options.rawSuccess);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(
@@ -84,7 +94,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 }
 
 export async function uploadFile<T>(path: string, filePath: string, name: string): Promise<T> {
-  const token = getAccessToken();
+  const session = getSessionSnapshot();
+  const token = session.token;
   if (!token) throw new ApiError("登录已失效，请重新登录", "AUTH_REQUIRED", 401);
   const response = await Taro.uploadFile({
     url: `${runtimeConfig.apiBaseUrl}${path}`,
@@ -93,6 +104,7 @@ export async function uploadFile<T>(path: string, filePath: string, name: string
     formData: { originalName: name },
     header: { Authorization: `Bearer ${token}` }
   });
+  if (response.statusCode === 401) clearSessionIfCurrent(session);
   let body: ApiSuccess<T> | ApiFailure;
   try {
     body = JSON.parse(response.data) as ApiSuccess<T> | ApiFailure;
@@ -109,5 +121,5 @@ export async function uploadFile<T>(path: string, filePath: string, name: string
       failure?.error.details
     );
   }
-  return body.data;
+  return responseData<T>(body, response.statusCode);
 }

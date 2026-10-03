@@ -12,6 +12,29 @@ const token = "abcdefghijklmnopqrstuvwx";
 const jobDemandId = "40000000-0000-4000-8000-000000000001";
 
 describe("公开推荐与项目图片边界", () => {
+  it("公开奖励仅提供承诺字段，不暴露供应商报价、政策ID或内部备注", async () => {
+    const policy = {
+      id: "80000000-0000-4000-8000-000000000001", type: "EMPLOYEE_REFERRAL",
+      amount: "600", retentionDays: 30, achievementConditions: "在岗满30天后审核", exclusionConditions: "自荐不计奖",
+      employeeType: "普通员工", effectiveAt: new Date("2020-01-01"), expiresAt: null, isActive: true,
+      notes: "internal-policy-note"
+    };
+    const prisma = createPrismaMock({ jobDemand: { findFirst: async () => ({
+      id: jobDemandId, requiredCount: 10, title: "包装工", salary: "5500-7000元/月", city: "成都", category: "生产制造", benefits: ["工作餐"],
+      supplierPolicyId: "private-supplier-policy", referralPolicyId: policy.id, createdById: "private-creator",
+      supplierPolicy: { amount: "private-supplier-price" }, referralPolicy: policy,
+      project: { managerPhone: null, name: "演示工厂", images: [] }
+    }) } });
+    const app = await buildTestApp(prisma);
+    apps.push(app);
+    const response = await app.inject({ method: "GET", url: `/api/public/job-demands/${jobDemandId}` });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({ benefits: ["工作餐"], city: "成都", referralOffer: { amount: "600", retentionDays: 30 } });
+    for (const secret of ["supplierPolicy", "referralPolicyId", "createdById", "internal-policy-note", "private-supplier-price", policy.id]) {
+      expect(response.body).not.toContain(secret);
+    }
+  });
+
   it("公开推荐 token 只解析岗位，不暴露推荐人", async () => {
     const prisma = createPrismaMock({
       referralShare: {

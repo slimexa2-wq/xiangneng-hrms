@@ -82,6 +82,7 @@ enum ApplicationSource {
 enum RewardStatus {
   PENDING
   ACHIEVED
+  APPROVED
   PAID
   CANCELLED
 }
@@ -465,6 +466,7 @@ model Policy {
   supplierLevel         String?          @map("supplier_level") @db.VarChar(32)
   employeeType          String?          @map("employee_type") @db.VarChar(64)
   amount                Decimal          @db.Decimal(12, 2)
+  retentionDays         Int              @default(30) @map("retention_days")
   achievementConditions String           @map("achievement_conditions") @db.Text
   exclusionConditions   String?          @map("exclusion_conditions") @db.Text
   effectiveAt           DateTime         @map("effective_at") @db.Date
@@ -496,6 +498,9 @@ model JobDemand {
   salary           String           @db.VarChar(500)
   workTime         String           @map("work_time") @db.VarChar(500)
   workLocation     String           @map("work_location") @db.VarChar(500)
+  city             String?          @db.VarChar(64)
+  category         String?          @db.VarChar(64)
+  benefits         Json             @default("[]")
   deadline         DateTime
   status           JobStatus        @default(RECRUITING)
   supplierPolicyId String?          @map("supplier_policy_id") @db.Uuid
@@ -647,6 +652,7 @@ model ReferralRecord {
   reward            ReferralReward?
 
   @@index([recommenderUserId, createdAt])
+  @@unique([personId, jobDemandId])
   @@map("referral_records")
 }
 
@@ -657,15 +663,35 @@ model ReferralReward {
   amount     Decimal        @db.Decimal(12, 2)
   status     RewardStatus   @default(PENDING)
   achievedAt DateTime?      @map("achieved_at")
+  approvedAt DateTime?      @map("approved_at")
+  approvedById String?     @map("approved_by_id") @db.Uuid
   paidAt     DateTime?      @map("paid_at")
   notes      String?        @db.Text
   createdAt  DateTime       @default(now()) @map("created_at")
   updatedAt  DateTime       @updatedAt @map("updated_at")
   referral   ReferralRecord @relation(fields: [referralId], references: [id], onDelete: Cascade)
   policy     Policy?        @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  approvedBy User?          @relation("ReferralRewardApprovers", fields: [approvedById], references: [id], onDelete: Restrict)
+  payment    ReferralRewardPayment?
 
   @@index([status])
   @@map("referral_reward_records")
+}
+
+model ReferralRewardPayment {
+  id         String         @id @default(uuid()) @db.Uuid
+  rewardId   String         @unique @map("reward_id") @db.Uuid
+  amount     Decimal        @db.Decimal(12, 2)
+  reference  String         @unique @db.VarChar(120)
+  proof      String         @db.VarChar(1000)
+  paidAt     DateTime       @map("paid_at")
+  paidById   String         @map("paid_by_id") @db.Uuid
+  createdAt  DateTime       @default(now()) @map("created_at")
+  reward     ReferralReward @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  paidBy     User           @relation("ReferralRewardPayers", fields: [paidById], references: [id], onDelete: Restrict)
+
+  @@index([paidById, paidAt])
+  @@map("referral_reward_payments")
 }
 
 model SalaryImportBatch {
@@ -845,6 +871,8 @@ model User {
   recommendedPeople       Person[]                 @relation("RecommendedPeople")
   applicationReferrals    Application[]            @relation("ApplicationRecommenders")
   referralRecords         ReferralRecord[]         @relation("ReferralRecommenders")
+  approvedReferralRewards ReferralReward[]         @relation("ReferralRewardApprovers")
+  referralRewardPayments  ReferralRewardPayment[]  @relation("ReferralRewardPayers")
   referralShares          ReferralShare[]          @relation("ReferralShareCreators")
   uploadedPersonFiles     PersonFile[]             @relation("UploadedPersonFiles")
   statusChanges           PersonStatusLog[]        @relation("PersonStatusActors")

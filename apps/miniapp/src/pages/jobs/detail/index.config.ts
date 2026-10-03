@@ -1,3 +1,4 @@
 export default definePageConfig({
-  enableShareAppMessage: true
+  enableShareAppMessage: true,
+  navigationBarTitleText: "岗位详情"
 });

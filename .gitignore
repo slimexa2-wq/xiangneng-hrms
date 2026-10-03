@@ -18,6 +18,7 @@ apps/api/uploads/*
 apps/api/data/*.db
 apps/api/src/generated/
 apps/miniapp/.temp/
+apps/miniapp/.swc/
 apps/miniapp/dist/
 prisma/generated/
 docs/screenshots/*.png

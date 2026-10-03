@@ -19,7 +19,8 @@ import { writeAudit } from "../audit.js";
 import { AppError } from "../errors.js";
 
 const publicApplicationSchema = applicationSchema.extend({
-  referralToken: z.string().trim().min(16).max(32).optional()
+  referralToken: z.string().trim().min(16).max(32).optional(),
+  consent: z.literal(true).optional()
 });
 
 const applicationQuerySchema = z.object({
@@ -31,6 +32,7 @@ const applicationQuerySchema = z.object({
   recommenderUserId: idSchema.optional()
   ,keyword: z.string().trim().max(100).optional()
   ,interviewStatus: z.nativeEnum(InterviewStatus).optional()
+  ,employmentStatus: z.nativeEnum(EmploymentStatus).optional()
 });
 
 export async function applicationRoutes(app: FastifyInstance): Promise<void> {
@@ -67,6 +69,7 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
       supplierId: query.supplierId,
       recommenderUserId: query.recommenderUserId,
       interviewStatus: query.interviewStatus
+      ,employmentStatus: query.employmentStatus
     }, query.keyword ? {
       OR: [
         { person: { name: { contains: query.keyword, mode: "insensitive" as const } } },
@@ -94,11 +97,12 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/applications/me", { preHandler: [app.authenticate] }, async (request) => {
     const user = getSession(request);
-    if (user.role !== UserRole.SUPPLIER && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.JOB_SEEKER) {
+    const supplierView = user.role === UserRole.SUPPLIER || user.role === UserRole.SUPPLIER_ADMIN;
+    if (!supplierView && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.OUTSOURCED_EMPLOYEE && user.role !== UserRole.JOB_SEEKER) {
       throw new AppError(403, "FORBIDDEN", "该角色没有“我的报名”视图");
     }
     const items = await app.prisma.application.findMany({
-      where: applicationWhere(user),
+      where: supplierView ? applicationWhere(user) : { personId: user.personId ?? "00000000-0000-0000-0000-000000000000" },
       include: {
         jobDemand: { include: { project: true } },
         person: {
@@ -130,6 +134,9 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
       include: { person: true }
     });
     if (!application) throw new AppError(404, "NOT_FOUND", "报名记录不存在或无权访问");
+    if (application.employmentStatus === EmploymentStatus.ACTIVE || application.employmentStatus === EmploymentStatus.LEFT) {
+      throw new AppError(409, "APPLICATION_EMPLOYMENT_LOCKED", "已入职或已离职的报名不能再修改面试状态，请通过人员档案办理入离职");
+    }
     const nextStatus = input.status === InterviewStatus.PENDING_ARRIVAL || input.status === InterviewStatus.ARRIVED
       ? EmploymentStatus.INTERVIEWING
       : input.status === InterviewStatus.PASSED
@@ -141,7 +148,7 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
         data: { interviewStatus: input.status, interviewDate: input.interviewDate, employmentStatus: nextStatus }
       });
       const latest = await tx.application.findFirst({ where: { personId: application.personId }, orderBy: { appliedAt: "desc" }, select: { id: true } });
-      if (latest?.id === id) {
+      if (latest?.id === id && application.person.status !== EmploymentStatus.ACTIVE && application.person.status !== EmploymentStatus.LEFT) {
         await tx.person.update({
           where: { id: application.personId },
           data: { interviewStatus: input.status, interviewDate: input.interviewDate ?? undefined, status: nextStatus, notes: input.notes ?? undefined }

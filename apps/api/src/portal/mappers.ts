@@ -1,4 +1,5 @@
 import type { SessionUser } from "@xiangneng/shared";
+import { publicReferralOffer } from "../services/job-offer.js";
 
 type DateLike = Date | string | null | undefined;
 
@@ -15,13 +16,18 @@ export function dateTime(value: DateLike): string | null {
 export function portalRole(role: SessionUser["role"]): "personal" | "group_leader" | "company_manager" | "project_manager" | "site_operator" | "supplier" {
   switch (role) {
     case "HEADQUARTERS_MANAGER":
+    case "SUPER_ADMIN":
+    case "GROUP_LEADER":
     case "SYSTEM_ADMIN":
       return "group_leader";
     case "BRANCH_MANAGER":
+    case "DEPARTMENT_MANAGER":
       return "company_manager";
     case "RESOURCE_SPECIALIST":
       return "project_manager";
     case "PROJECT_OPERATOR":
+    case "INTERNAL_HR":
+    case "RECRUITER":
       return "site_operator";
     case "SUPPLIER":
     case "SUPPLIER_ADMIN":
@@ -35,6 +41,7 @@ export function portalSession(user: SessionUser) {
   const role = user.username === "demo_project" ? "project_manager" : portalRole(user.role);
   return {
     personaId: user.username,
+    permissions: user.permissions,
     name: user.displayName,
     role,
     subtitle: role === "group_leader"
@@ -47,14 +54,14 @@ export function portalSession(user: SessionUser) {
             ? "项目负责人 · 授权项目"
             : role === "supplier"
               ? "供应商 · 自有人员"
-              : user.role === "EMPLOYEE"
+              : user.role === "EMPLOYEE" || user.role === "OUTSOURCED_EMPLOYEE"
                 ? "在职员工 · 个人中心"
                 : "求职者 · 招聘服务",
     companyId: user.branchId ?? undefined,
     projectIds: user.projectIds,
     supplierId: user.supplierId ?? undefined,
     personId: user.personId ?? undefined,
-    personStatus: user.role === "EMPLOYEE" ? "employed" : user.role === "JOB_SEEKER" ? "registered" : undefined
+    personStatus: user.role === "EMPLOYEE" || user.role === "OUTSOURCED_EMPLOYEE" ? "employed" : user.role === "JOB_SEEKER" ? "registered" : undefined
   };
 }
 
@@ -83,8 +90,11 @@ export function parseSalary(value: string): { min: number; max: number } {
 }
 
 export function policyAmount(value: unknown): number {
-  const match = String(value ?? "").replaceAll(",", "").match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : 0;
+  const text = String(value ?? "").replaceAll(",", "").trim();
+  const explicitAmount = text.match(/(\d+(?:\.\d{1,2})?)\s*元/)
+    ?? text.match(/(?:奖励(?:金)?|返费|返佣|奖金)[\s：:=￥¥]*(\d+(?:\.\d{1,2})?)(?![\d.]|\s*天)/)
+    ?? text.match(/^(\d+(?:\.\d{1,2})?)$/);
+  return explicitAmount ? Number(explicitAmount[1]) : 0;
 }
 
 export function mapPortalPerson(person: any) {
@@ -126,6 +136,7 @@ export function mapPortalPerson(person: any) {
 }
 
 export function mapPortalJob(job: any) {
+  const offer = publicReferralOffer(job.referralPolicy);
   const salary = parseSalary(job.salary ?? "");
   const progress = job.progress ?? { registered: 0, onboarded: 0 };
   const supplierPolicy = job.supplierPolicy?.achievementConditions ?? "按项目有效供应商政策执行";
@@ -142,23 +153,27 @@ export function mapPortalJob(job: any) {
     projectName: job.project?.name ?? "",
     companyName: job.project?.branch?.name ?? "",
     title: job.title,
-    type: job.project?.businessType ?? "普工",
+    type: job.category || job.project?.businessType || "普工",
+    salaryText: job.salary ?? "",
     salary_min: salary.min,
     salary_max: salary.max,
     headcount: job.requiredCount,
     work_time: job.workTime,
     requirements: job.requirements,
     duties: job.notes ?? job.requirements,
-    benefits: job.salary,
+    benefits: Array.isArray(job.benefits) ? job.benefits.filter((item: unknown) => typeof item === "string").join("、") : "",
     deadline: dateOnly(job.deadline),
     status: portalJobStatus(job.status),
     supplier_policy: supplierPolicy,
     referral_policy: referralPolicy,
+    referral_reward: offer ? Number(offer.amount) : null,
+    referral_retention_days: offer?.retentionDays ?? null,
+    referral_exclusions: offer?.exclusionConditions ?? null,
     policy_start: dateOnly(job.supplierPolicy?.effectiveAt ?? job.referralPolicy?.effectiveAt ?? job.createdAt),
     policy_end: dateOnly(job.supplierPolicy?.expiresAt ?? job.referralPolicy?.expiresAt ?? job.deadline),
     settlement_condition: job.supplierPolicy?.notes ?? "满足政策条件后次月结算",
     created_at: dateTime(job.createdAt),
-    region: job.project?.branch?.name ?? "",
+    region: job.city || job.project?.branch?.name || "",
     address: job.workLocation,
     projectDescription: job.project?.description ?? job.project?.remark ?? "",
     managerName: job.project?.managerName ?? "项目负责人",
