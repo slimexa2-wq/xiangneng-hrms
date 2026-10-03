@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EditOutlined, EyeOutlined, PlusOutlined, SendOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, EditOutlined, EyeOutlined, PlusOutlined, SendOutlined, TeamOutlined, UserAddOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import {
   Alert,
   App,
@@ -119,6 +119,7 @@ function JobDemandsContent() {
     async () => mapList(await api.get<ListResult<JobDemand> | JobDemand[]>("/job-demands", { page, pageSize, keyword, projectId, status }), adaptJobDemand, page, pageSize),
     [page, pageSize, keyword, projectId, status]
   );
+  const overview = useApiResource(async () => (await getAllPages<JobDemand>("/job-demands")).items.map(adaptJobDemand), []);
   const projectsResource = useApiResource(
     () => getAllPages<Project>("/projects"),
     []
@@ -154,7 +155,7 @@ function JobDemandsContent() {
       await api.post("/job-demands", body);
       message.success("招聘需求已发布并同步");
       setFormOpen(false);
-      await resource.reload();
+      await Promise.all([resource.reload(), overview.reload()]);
     } catch (error) {
       message.error(getErrorMessage(error));
     } finally {
@@ -186,7 +187,7 @@ function JobDemandsContent() {
       setDetail(next);
       detailForm.setFieldsValue(demandToForm(next));
       message.success("招聘需求已保存，并同步到各角色小程序");
-      await resource.reload();
+      await Promise.all([resource.reload(), overview.reload()]);
     } catch (error) {
       message.error(getErrorMessage(error));
     } finally {
@@ -205,7 +206,7 @@ function JobDemandsContent() {
     try {
       await api.patch(`/job-demands/${demand.id}`, { status: nextStatus });
       message.success(nextStatus === JobStatus.RECRUITING ? "岗位已重新上架" : "岗位已下架，停止接收新报名");
-      await resource.reload();
+      await Promise.all([resource.reload(), overview.reload()]);
     } catch (error) { message.error(getErrorMessage(error)); }
     finally { setChangingStatusId(undefined); }
   };
@@ -213,7 +214,7 @@ function JobDemandsContent() {
   const columns: TableColumnsType<JobDemand> = [
     { title: "岗位与工资", fixed: "left", width: 260, render: (_, row) => <div className="recruitment-cell"><strong className="recruitment-job-title">{row.title}</strong><span className="recruitment-salary">{row.salary}</span><span className="recruitment-cell-muted">{projectName(row)}{row.category ? ` · ${row.category}` : ""}</span>{row.benefits?.length ? <span className="recruitment-cell-muted">{row.benefits.slice(0, 3).join(" · ")}{row.benefits.length > 3 ? ` 等 ${row.benefits.length} 项` : ""}</span> : null}</div> },
     { title: "地点与班次", width: 185, render: (_, row) => <div className="recruitment-cell"><span>{row.city ? `${row.city} · ` : ""}{row.workLocation}</span><span className="recruitment-cell-muted">{row.workTime}</span></div> },
-    { title: "招聘进度", width: 180, render: (_, row) => <div className="recruitment-cell"><span>已入职 <strong>{row.onboardCount ?? 0}</strong> / {row.requiredCount} 人</span><Progress percent={Math.min(100, Math.round((row.onboardCount ?? 0) / row.requiredCount * 100))} strokeColor="#8e8e93" size="small" showInfo={false} /><span className="recruitment-cell-muted">报名 {row.applicationCount ?? 0} · 通过 {row.passedCount ?? 0}</span><span className="recruitment-cell-muted">还缺 {row.remainingCount ?? Math.max(0, row.requiredCount - (row.onboardCount ?? 0))} 人</span></div> },
+    { title: "招聘进度", width: 180, render: (_, row) => <div className="recruitment-cell"><span>已入职 <strong>{row.onboardCount ?? 0}</strong> / {row.requiredCount} 人</span><Progress percent={Math.min(100, Math.round((row.onboardCount ?? 0) / row.requiredCount * 100))} strokeColor="#246bfd" size="small" showInfo={false} /><span className="recruitment-cell-muted">报名 {row.applicationCount ?? 0} · 通过 {row.passedCount ?? 0}</span><span className="recruitment-cell-muted">还缺 {row.remainingCount ?? Math.max(0, row.requiredCount - (row.onboardCount ?? 0))} 人</span></div> },
     { title: "发布状态", width: 150, render: (_, row) => <div className="recruitment-cell"><StatusTag status={row.status} /><span className="recruitment-cell-muted">截止 {formatDate(row.deadline)}</span>{row.status === JobStatus.RECRUITING && dayjs(row.deadline).isBefore(dayjs()) ? <Tag color="orange">截止已过，请更新</Tag> : null}</div> },
     { title: "推荐奖励", width: 140, render: (_, row) => row.referralPolicy ? <div className="recruitment-cell"><strong>{formatMoney(row.referralPolicy.amount)}</strong><span className="recruitment-cell-muted">入职满 {row.referralPolicy.retentionDays ?? 30} 天</span></div> : <span className="recruitment-cell-muted">未绑定规则</span> },
     {
@@ -229,10 +230,20 @@ function JobDemandsContent() {
       <RecruitmentModuleNav />
       <PageHeader
         title="岗位发布"
-        description="把工资、班次和实际福利说明白，方便求职者快速决定。"
+        description="管理四川省内岗位，发布后同步到好工到小程序。"
         extra={can(Permission.JOB_WRITE) ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>发布新岗位</Button> : null}
       />
+      <div className="recruitment-overview" aria-label="招聘概况">
+        {[
+          { label: "在招岗位", value: overview.data?.filter((job) => job.status === JobStatus.RECRUITING).length, icon: <AppstoreOutlined />, tone: "blue", unit: "个" },
+          { label: "累计报名", value: overview.data?.reduce((sum, job) => sum + (job.applicationCount ?? 0), 0), icon: <TeamOutlined />, tone: "violet", unit: "人次" },
+          { label: "已入职", value: overview.data?.reduce((sum, job) => sum + (job.onboardCount ?? 0), 0), icon: <CheckCircleOutlined />, tone: "green", unit: "人次" },
+          { label: "在招缺口", value: overview.data?.filter((job) => job.status === JobStatus.RECRUITING).reduce((sum, job) => sum + (job.remainingCount ?? Math.max(0, job.requiredCount - (job.onboardCount ?? 0))), 0), icon: <UserAddOutlined />, tone: "orange", unit: "人" }
+        ].map((item) => <div className="recruitment-overview-card" key={item.label}><div><span>{item.label}</span><strong>{overview.error || item.value === undefined ? "—" : item.value}<small>{item.unit}</small></strong></div><span className={`recruitment-overview-icon recruitment-overview-icon--${item.tone}`}>{item.icon}</span></div>)}
+      </div>
+      {overview.error ? <Alert type="warning" showIcon title="招聘概况暂时无法读取" action={<Button type="link" onClick={() => void overview.reload()}>重试</Button>} className="recruitment-overview-error" /> : null}
       <ContentCard>
+        <div className="recruitment-status-tabs" aria-label="岗位发布状态">{[{ label: "全部岗位", value: undefined }, ...Object.entries(labels.jobStatus).map(([value, label]) => ({ value: value as JobStatus, label }))].map((item) => <button type="button" key={item.value ?? "ALL"} className={status === item.value ? "active" : ""} aria-pressed={status === item.value} onClick={() => { setStatus(item.value); setPage(1); }}>{item.label}<span>{overview.error || !overview.data ? "—" : overview.data.filter((job) => !item.value || job.status === item.value).length}</span></button>)}</div>
         <div className="filter-grid compact">
           <Input.Search allowClear placeholder="搜索岗位名称 / 招聘要求" value={keyword} onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
           <ReferenceSelect placeholder="项目" options={projectOptions} value={projectId} onChange={(value) => { setProjectId(value as string | undefined); setPage(1); }} loading={projectsResource.loading} />

@@ -40,6 +40,7 @@ const adminMenu = async (page, item, group = '招聘管理') => {
   const title = menu.locator('.ant-menu-submenu-title').filter({ hasText: group });
   if (await title.getAttribute('aria-expanded') !== 'true') await title.click();
   await menu.getByText(item, { exact: true }).click();
+  if (mobile) await expect(page.locator('.ant-drawer-open')).toHaveCount(0);
 };
 
 try {
@@ -52,10 +53,21 @@ try {
     await capture(page, `portal-${label}-home-first-screen`);
     await capture(page, `portal-${label}-home`, true);
 
+    const navigation = page.locator(width === 390 ? '.bottom-nav' : '.recruit-desktop-nav');
+    await expect(navigation.getByRole('link')).toHaveCount(4);
+    await navigation.getByRole('link', { name: '我的报名', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '我的报名', exact: true })).toBeVisible();
+    await expect(navigation.getByRole('link', { name: '我的报名', exact: true })).toHaveClass('active');
+    await expect(navigation.getByRole('link', { name: '我的', exact: true })).not.toHaveClass('active');
+    await navigation.getByRole('link', { name: '找工作', exact: true }).click();
+    await expect(page.locator('.job-card').first()).toBeVisible();
+    record(`portal ${label}: four primary destinations and exclusive application navigation`);
+
     const first = page.locator('.job-card').first();
     await expect(first.locator('.bluecollar-salary')).toContainText(/元/);
     await expect(first.locator('.job-meta')).not.toHaveText('');
     const firstAction = await first.getByRole('button', { name: '立即报名' }).boundingBox();
+    expect(firstAction.height).toBeGreaterThanOrEqual(44);
     const nav = await page.locator('.bottom-nav').isVisible() ? await page.locator('.bottom-nav').boundingBox() : null;
     record(`portal ${label}: first job salary, city, apply action`, { firstAction, nav, firstActionAboveNavigation: !nav || firstAction.y + firstAction.height <= nav.y });
     if (nav) expect(firstAction.y + firstAction.height).toBeLessThanOrEqual(nav.y);
@@ -196,7 +208,7 @@ try {
   await overflow(admin, 'admin mobile job publishing');
   await capture(admin, 'admin-mobile-jobs');
   await admin.getByRole('button', { name: /发布新岗位/ }).click();
-  await expect(admin.getByRole('dialog')).toBeVisible();
+  await expect(admin.getByRole('dialog', { name: '发布新岗位', exact: true })).toBeVisible();
   await overflow(admin, 'admin mobile publishing form');
   await capture(admin, 'admin-mobile-publish', true);
   await admin.context().close();

@@ -23,6 +23,7 @@ export default function MyApplicationsPage() {
       <AsyncBoundary loading={applications.loading} error={applications.error} empty={!items.length} emptyText="暂无报名记录" onRetry={() => void applications.reload()}>
         {items.map((application) => (
           <SectionCard title={application.jobDemand?.title ?? "岗位信息暂缺"} key={application.id} action={<StatusTag status={applicationProgressStatus(application)} />}>
+            <ApplicationSteps status={applicationProgressStatus(application)} />
             <FieldRow label="项目" value={application.jobDemand ? projectName(application.jobDemand) : application.person ? projectName(application.person) : "项目资料暂缺"} />
             <FieldRow label="报名人" value={application.person?.name ?? application.personName ?? user.displayName} />
             <FieldRow label="手机号" value={application.person?.phone ?? application.phone} />
@@ -37,4 +38,9 @@ export default function MyApplicationsPage() {
       <CandidateNavigation active="applications" user={user} />
     </PageShell>
   );
+}
+
+function ApplicationSteps({ status }: { status?: string }) {
+  const step = status === "ACTIVE" || status === "LEFT" ? 2 : ["INTERVIEWING", "ARRIVED", "PASSED", "FAILED", "PENDING_ONBOARD"].includes(status ?? "") ? 1 : 0;
+  return <View className="recruitment-application-steps">{["已报名", "面试", "入职"].map((label, index) => <View key={label} className={`recruitment-application-step ${index <= step ? "recruitment-application-step--done" : ""}`}><Text className="recruitment-application-step__dot">{index + 1}</Text><Text>{label}</Text></View>)}</View>;
 }

@@ -4,5 +4,5 @@ import "./recruitment-workspace.css";
 
 export function RecruitmentWorkspace({ children, enabled = true }: PropsWithChildren<{ enabled?: boolean }>) {
   if (!enabled) return children;
-  return <ConfigProvider theme={{ token: { colorPrimary: "#0071e3", colorInfo: "#0071e3", colorText: "#1d1d1f", colorTextSecondary: "#6e6e73", colorBgLayout: "#f5f5f7", colorBorder: "#d9d9de", borderRadius: 12, controlHeight: 40, fontSize: 15, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif" }, components: { Card: { borderRadiusLG: 18 }, Table: { headerBg: "#f5f5f7", headerColor: "#6e6e73", cellPaddingBlock: 20 }, Modal: { borderRadiusLG: 20 } } }}><div className="recruitment-workspace">{children}</div></ConfigProvider>;
+  return <ConfigProvider theme={{ token: { colorPrimary: "#246bfd", colorInfo: "#246bfd", colorText: "#19263d", colorTextSecondary: "#79849a", colorBgLayout: "#f5f7fb", colorBorder: "#e2e8f2", borderRadius: 8, controlHeight: 38, fontSize: 14, fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif" }, components: { Card: { borderRadiusLG: 14 }, Table: { headerBg: "#f8faff", headerColor: "#79849a", cellPaddingBlock: 16 }, Modal: { borderRadiusLG: 18 } } }}><div className="recruitment-workspace">{children}</div></ConfigProvider>;
 }

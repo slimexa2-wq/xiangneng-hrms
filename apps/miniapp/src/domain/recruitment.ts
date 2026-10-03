@@ -26,6 +26,12 @@ export function remainingJobs(job: JobDemand): number {
   return Math.max(0, job.remainingCount ?? job.progress?.remainingGap ?? job.requiredCount - (job.onboardedCount ?? 0));
 }
 
+export function matchesJobBenefit(job: Pick<JobDemand, "benefits" | "workTime">, benefit: string): boolean {
+  if (!benefit) return true;
+  const text = `${(job.benefits ?? []).join("、")}、${job.workTime ?? ""}`;
+  return !new RegExp(`(?:不|无|非)${benefit}`).test(text) && text.includes(benefit);
+}
+
 export function rewardCondition(job: JobDemand): string {
   const offer = job.referralOffer;
   if (!offer) return "";

@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarDays, ChevronRight, Clock3, MapPin, Phone, UsersRound } from 'lucide-react';
+import { BriefcaseBusiness, Building2, CalendarDays, ChevronRight, Clock3, MapPin, Phone, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Job, Person } from '../app/types';
 import { formatSalaryRange } from '../app/format';
@@ -9,7 +9,7 @@ import { StatusTag } from './StatusTag';
 export function SalaryLabel({ job }: { job: Pick<Job, 'salary_min' | 'salary_max' | 'salaryText'> }) {
   const salary = jobSalary(job);
   const parts = salary.match(/^([\d,]+(?:\s*[-–—~至]\s*[\d,]+)?)(元\s*[/／]\s*(?:月|小时|天|日|周))$/);
-  return <strong className="bluecollar-salary">{parts ? <><span>{parts[1]}</span><span className="salary-unit">{parts[2]}</span></> : salary}</strong>;
+  return <strong className={`bluecollar-salary${parts ? '' : ' bluecollar-salary--description'}`}>{parts ? <><span>{parts[1]}</span><span className="salary-unit">{parts[2]}</span></> : salary}</strong>;
 }
 
 export function JobCard({ job, portal = 'personal', onApply }: { job: Job; portal?: 'personal' | 'supplier' | 'internal'; onApply?: (job: Job) => void }) {
@@ -19,10 +19,10 @@ export function JobCard({ job, portal = 'personal', onApply }: { job: Job; porta
     <div className="job-main">
       <div className="bluecollar-job-heading"><Link to={detailPath}><h3>{job.title}</h3></Link><StatusTag status={job.status} /></div>
       <SalaryLabel job={job} />
-      <p className="bluecollar-company">{job.projectName}</p>
       <div className="job-meta"><span><MapPin />{job.region.replace('四川省', '') || '地点待确认'}</span><span><Clock3 />{job.work_time || '班次待确认'}</span></div>
       <div className="bluecollar-benefits">{jobBenefits(job).slice(0, 3).map((benefit) => <span key={benefit}>{benefit}</span>)}</div>
-      <div className="bluecollar-job-footer"><span>招聘 {job.headcount} 人</span><div><Link className="job-detail-link" to={detailPath}>了解详情</Link>{onApply && <button className="primary-button" type="button" disabled={!isRecruiting(job)} onClick={() => onApply(job)}>{isRecruiting(job) ? '立即报名' : '暂停报名'}</button>}</div></div>
+      <Link className="bluecollar-company" to={detailPath}><span className="bluecollar-company-icon"><Building2 size={16} /></span><span>{job.projectName}</span><ChevronRight size={15} /></Link>
+      <div className="bluecollar-job-footer"><Link className="job-detail-link" to={detailPath}>查看详情<ChevronRight size={15} /></Link>{onApply && <button className="primary-button" type="button" disabled={!isRecruiting(job)} onClick={() => onApply(job)}>{isRecruiting(job) ? '立即报名' : '暂停报名'}</button>}</div>
     </div>
   </article>;
   return <article className={`job-card job-card--${portal}`}>
